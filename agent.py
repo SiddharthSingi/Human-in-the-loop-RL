@@ -6,7 +6,7 @@ class VanillaAgent():
     def __init__(self, table_size, grid) -> None:
         
         self.qtable = np.zeros(shape=table_size)    # Q-Learning table
-        self.epsilon = 0.15  # Exploration epsilon
+        self.epsilon = 0.1  # Exploration epsilon
         self.grid = grid
         self.action_space = 4
         self.lr = 0.05
