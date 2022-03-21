@@ -2,6 +2,7 @@ from environment import Grid, ExpertGrid
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+# Uncomment the algorithm you'd like to run at the end
 
 class VanillaAgent():
     def __init__(self, table_size, grid, fname) -> None:
@@ -449,6 +450,7 @@ class MonteCarlo(VanillaAgent):
         return action
 
 
+## Vanilla
 # grid = Grid()
 # dpath = 'Outputs/Vanilla/1M.4'
 # os.makedirs(dpath)
@@ -458,6 +460,7 @@ class MonteCarlo(VanillaAgent):
 # print(repr(np.argmax(agent.qtable, axis=2)))
 
 
+## ALG1
 grid = ExpertGrid()
 dpath = 'Outputs/ALG1/1M.4'
 os.makedirs(dpath)
@@ -468,6 +471,7 @@ agent.policy_rollout(10000, 1000)
 print(repr(np.argmax(agent.qtable, axis=2)))
 
 
+## ALG2
 # grid = Grid()
 # dpath = 'Outputs/ALG2/1M.2' # Output folder name
 # os.makedirs(dpath)
