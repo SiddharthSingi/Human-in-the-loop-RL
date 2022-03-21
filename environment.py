@@ -153,7 +153,7 @@ class ExpertGrid(Grid):
         reward = 0
 
         # CallExpert
-        if action==4:
+        if a==4:
             action = self.expertaction[self.current_state[0], self.current_state[1]]
             reward += -5
             # print('Expert called!')
