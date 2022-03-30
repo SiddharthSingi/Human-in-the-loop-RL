@@ -46,19 +46,20 @@ class VanillaAgent():
         self.qtable[prev_state[0], prev_state[1], action] = \
             qsa*(1-self.lr) + self.lr*(reward + self.gamma*qmax)
 
-    def play(self, num_episodes):
+    def play(self, num_episodes, decay_ep, eps_start=0.15, eps_end=0.01):
         """
         The agent will train with an exploitation epsilon and update self.qtable
-        self.epsilon will exponentially decay from 0.15 to 0.01 in num_episodes
+        self.epsilon will exponentially decay from eps_start to eps_end in decay_ep
 
         """
-        lmda = math.log(0.15/0.01)/num_episodes
+        if not decay_ep: decay_ep=num_episodes
+        lmda = math.log(eps_start/eps_end)/decay_ep
         for ep in range(num_episodes):
             done = False
             prev_obs = self.grid.reset()
             # print('episode: ', ep)
             tot_reward = 0
-            self.epsilon = 0.15*math.exp(-lmda*ep)
+            self.epsilon = eps_start*math.exp(-lmda*ep)
             while not done:
                 action = self.choose_action(prev_obs)
                 # print(self.grid.done)
@@ -141,7 +142,7 @@ class VanillaAgent():
         ax0.set_title('Rewards per episode')
         ax0.plot(x, y)
         os.makedirs(os.path.join(self.fname, 'MC'))
-        plt.text(0.5, 0.5, f'Fell in trap {fell_in_trap*100/num_episodes:.3f} % times', horizontalalignment='right',
+        ax0.text(1, 0.5, f'Fell in trap {fell_in_trap*100/num_episodes:.3f} % times', horizontalalignment='right',
             verticalalignment='bottom', transform=ax0.transAxes)
         plt.savefig(os.path.join(self.fname, 'MC', 'rewards.jpg'), \
             bbox_inches ="tight",\
@@ -154,7 +155,7 @@ class VanillaAgent():
         ax1.set_title('Mean of returns for each state')
         for (i, j), z in np.ndenumerate(Z):
             ax1.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
-        plt.savefig(os.path.join(self.fname, 'MC', 'MaxQ.jpg'), \
+        plt.savefig(os.path.join(self.fname, 'MC', 'Mean_returns.jpg'), \
             bbox_inches ="tight",\
             dpi=250)
 
@@ -170,7 +171,7 @@ class VanillaAgent():
         np.set_printoptions(suppress=True)
         Z = self.rollout_tbl[:, :, :, 1][rows, cols, best_actions].reshape(10,10)
         ax3.matshow(Z, cmap='cool')
-        ax3.set_title('Counts of best action')
+        ax3.set_title('State visitation count')
         for (i, j), z in np.ndenumerate(Z):
             ax3.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
         plt.savefig(os.path.join(self.fname, 'MC', 'counts.jpg'), \
@@ -180,12 +181,12 @@ class VanillaAgent():
         # Plotting Variance of best action
         fig, ax3 = plt.subplots(figsize=(8,15))
         np.set_printoptions(suppress=True)
-        Z = np.round(self.rollout_tbl[:, :, :, 2][rows, cols, best_actions], 1).reshape(10,10)
+        Z = np.round(np.sqrt(self.rollout_tbl[:, :, :, 2][rows, cols, best_actions]), 1).reshape(10,10)
         ax3.matshow(Z, cmap='cool')
-        ax3.set_title('Variance of return for the best action of each state')
+        ax3.set_title('Standard deviation of return from each state')
         for (i, j), z in np.ndenumerate(Z):
             ax3.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
-        plt.savefig(os.path.join(self.fname, 'MC', 'variance_rewards.jpg'), \
+        plt.savefig(os.path.join(self.fname, 'MC', 'std_dev_returns.jpg'), \
             bbox_inches ="tight",\
             dpi=250)
 
@@ -274,11 +275,15 @@ class ALG2(VanillaAgent):
         return action
 
     
-    def play(self, num_episodes):
+    def play(self, num_episodes, decay_ep=False, eps_start=0.15, eps_end=0.01, retrain=False):
         
+        if not decay_ep: decay_ep=num_episodes
+        if retrain: self.qtable = np.load(retrain)
+        lmda = math.log(eps_start/eps_end)/decay_ep
         for ep in range(num_episodes):
             done = False
             prev_obs = self.grid.reset()
+            self.epsilon = eps_start*math.exp(-lmda*ep)
             tot_reward = 0
             while not done:
                 action = self.choose_action(prev_obs)
@@ -327,7 +332,7 @@ class ALG2(VanillaAgent):
         fig, ax2 = plt.subplots(figsize=(8,15))
         Z = np.argmax(agent.qtable[:, :, :, 0], axis=2)
         ax2.matshow(Z, cmap='cool')
-        ax2.set_title('Action with maxQ value')
+        ax2.set_title('Best Action in each state')
         for (i, j), z in np.ndenumerate(Z):
             ax2.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
         plt.savefig(os.path.join(self.fname, 'best_action.jpg'), \
@@ -345,7 +350,7 @@ class ALG2(VanillaAgent):
         # plt.show()
 
 
-        # Plotting Variance of best action
+        # Plotting Standard Deviation of return for best action
         rows, cols = np.indices((10,10))
         rows = rows.reshape(-1)
         cols = cols.reshape(-1)
@@ -353,13 +358,13 @@ class ALG2(VanillaAgent):
 
         fig, ax3 = plt.subplots(figsize=(8,15))
         np.set_printoptions(suppress=True)
-        Z = np.round(agent.qtable[:, :, :, 2][rows, cols, best_actions], 1).reshape(10,10)
+        Z = np.round(np.sqrt(agent.qtable[:, :, :, 2][rows, cols, best_actions]), 1).reshape(10,10)
         print(Z)
         ax3.matshow(Z, cmap='cool')
-        ax3.set_title('Variance of return for the best action of each state')
+        ax3.set_title('Standard deviation of return for the best action')
         for (i, j), z in np.ndenumerate(Z):
             ax3.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
-        plt.savefig(os.path.join(self.fname, 'variance_rewards.jpg'), \
+        plt.savefig(os.path.join(self.fname, 'std_dev_returns.jpg'), \
             bbox_inches ="tight",\
             dpi=250)
 
@@ -468,36 +473,34 @@ class MonteCarlo(VanillaAgent):
 
 
 # Vanilla
-grid = Grid()
-dpath = 'Outputs/Vanilla/10M.3'
+# grid = Grid()
+# dpath = 'Outputs/Vanilla/Expertrun2'
+# os.makedirs(dpath)
+# agent = VanillaAgent([10,10,4], grid, dpath)
+# # agent.play(10000000, 5e6, 0.20, 0.01)
+# agent.policy_rollout(100000, 1000, 'Outputs/Vanilla/expertaction.npy')
+# print(repr(np.argmax(agent.qtable, axis=2)))
+
+
+## ALG1
+grid = ExpertGrid()
+dpath = 'Outputs/ALG1/100k.2'
 os.makedirs(dpath)
-agent = VanillaAgent([10,10,4], grid, dpath)
-agent.play(10000000)
+# Our agent has 5 possible actions hence the q table size is 10,10,5
+agent = ALG1([10,10,5], grid, dpath)
+agent.play(100000, False, 0.25, 0.01)
 agent.policy_rollout(100000, 1000)
 print(repr(np.argmax(agent.qtable, axis=2)))
 
 
-# ## ALG1
-# grid = ExpertGrid()
-# dpath = 'Outputs/ALG1/1M.4'
-# os.makedirs(dpath)
-# # Our agent has 5 possible actions hence the q table size is 10,10,5
-# agent = ALG1([10,10,5], grid, dpath)
-# agent.play(1000000)
-# agent.policy_rollout(10000, 1000)
-# print(repr(np.argmax(agent.qtable, axis=2)))
-
-
 # # ALG2
 # grid = Grid()
-# dpath = 'Outputs/ALG2/1M.2' # Output folder name
+# dpath = 'Outputs/ALG2/10M.2/test' # Output folder name
 # os.makedirs(dpath)
 # # The agent can take 4 actions and for each action it finds the q-value, 2nd reward moment
 # # and the variance of the returs using Bellmann Equations
 # agent = ALG2([10,10,4,3], grid, dpath)
-# agent.play(10000)
-# np.set_printoptions(suppress=True)
-# print(repr(np.round(np.average(agent.qtable[:, :, :, 2], axis=2), 1)))
+# agent.play(1000000, eps_start=0.25, eps_end=0.01, retrain=False)
 
 
 # grid = Grid()
