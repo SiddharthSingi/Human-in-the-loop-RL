@@ -150,7 +150,6 @@ class ExpertGrid(Grid):
             [1, 2, 0, 3, 1, 1, 1, 3, 1, 1],
             [1, 0, 0, 0, 3, 1, 1, 1, 1, 1],
             [3, 3, 3, 3, 3, 3, 3, 3, 3, 0]])
-        np.random.seed(0)
 
     def step(self, a):
         """

@@ -142,6 +142,7 @@ class VanillaAgent():
             self.rewards_list.append(tot_reward)
 
         # Plot rewards
+        print(f'Total Average Rewards: {sum(self.rewards_list)/len(self.rewards_list)}')
         x = np.arange(0, len(self.rewards_list), smoothing)
         x = np.append(x, len(self.rewards_list)-1)
         y = [np.average(self.rewards_list[x[i]:x[i+1]]) for i in range(len(x)-1)]
@@ -399,9 +400,10 @@ class ALG2(VanillaAgent):
         # best_actions = best_actions.reshape(10,10)
         action_table = np.where(variances<threshold, best_actions, 4).reshape(10,10)
 
-        # fig, ax = plt.subplots()
-        # ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
-        # plt.show()
+        if threshold==5700:
+            fig, ax = plt.subplots()
+            ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+            plt.show()
 
         return action_table
     
@@ -434,6 +436,10 @@ class ALG2(VanillaAgent):
 
         fig, ax = plt.subplots()
         ax = sns.barplot(x=thresholds, y=thresh_rewards)
+        ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
+        ax.set_xlabel('Thresholds')
+        ax.set_ylabel('Average Return (1000 episodes)')
+        # ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
         plt.show()
 
         return
@@ -543,9 +549,9 @@ class MonteCarlo(VanillaAgent):
         return action
 
 
-# Vanilla
+# # Vanilla
 # grid = Grid()
-# dpath = 'Outputs/Vanilla/10M.7'
+# dpath = 'Outputs/Vanilla/10M.5/test'
 # num_episodes = 10000000
 # ep_decay = 5e6
 # smoothing_num = 1000
@@ -557,8 +563,8 @@ class MonteCarlo(VanillaAgent):
 # else:
 #     raise Exception('This dpath already exists, be more careful dummy!')
 # agent = VanillaAgent([10,10,4], grid, dpath)
-# agent.play(num_episodes, ep_decay, eps_start, eps_end)
-# agent.policy_rollout(100000, smoothing_num)
+# # agent.play(num_episodes, ep_decay, eps_start, eps_end)
+# agent.policy_rollout(1000, smoothing=1, qtable_path='Outputs/Vanilla/10M.5/qtable.npy')
 # print(repr(np.argmax(agent.qtable, axis=2)))
 
 # f = open(os.path.join(dpath, 'description.txt'), 'w')
@@ -573,17 +579,15 @@ class MonteCarlo(VanillaAgent):
 
 
 
-## ALG1
+# ALG1
 # grid = ExpertGrid()
-# dpath = 'Outputs/ALG1/100k.6'
-# if not os.path.exists(dpath):
-#     os.makedirs(dpath)
-# else:
-#     raise Exception('This dpath already exists, be more careful dummy!')
+# dpath = 'Outputs/ALG1/1M.6/test'
+# os.makedirs(dpath)
+
 # # Our agent has 5 possible actions hence the q table size is 10,10,5
 # agent = ALG1([10,10,5], grid, dpath)
-# agent.play(800000, 400000, 0.6, 0.07)
-# agent.policy_rollout(100000, 1000)
+# # agent.play(800000, 400000, 0.6, 0.07)
+# agent.policy_rollout(1000, 1, qtable_path='Outputs/ALG1/1M.6/qtable.npy')
 # print(repr(np.argmax(agent.qtable, axis=2)))
 
 
@@ -620,7 +624,7 @@ class MonteCarlo(VanillaAgent):
 # Create the rewards plot with thresholding
 grid = ExpertGrid()
 agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.4')
-agent.threshold_rollout(200, 8000, 100, 'Outputs/ALG2/10M.4/qtable.npy')
+agent.threshold_rollout(1000, 8000, 100, 'Outputs/ALG2/10M.4/qtable.npy')
 
 
 # grid = Grid()
