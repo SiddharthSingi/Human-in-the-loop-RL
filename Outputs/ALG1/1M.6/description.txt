@@ -1,0 +1,4 @@
+reward for calling expert: -10
+eps_start: 0.2
+eps_end: 0.01
+eps_decay: False

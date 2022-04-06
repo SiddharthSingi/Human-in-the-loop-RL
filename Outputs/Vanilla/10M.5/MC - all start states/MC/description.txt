@@ -1,0 +1,4 @@
+MC Sampling 
+episodes: 100k
+smoothing num: 1000
+starting_states: all possible states
