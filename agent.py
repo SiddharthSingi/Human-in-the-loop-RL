@@ -142,7 +142,8 @@ class VanillaAgent():
             self.rewards_list.append(tot_reward)
 
         # Plot rewards
-        print(f'Total Average Rewards: {sum(self.rewards_list)/len(self.rewards_list)}')
+        # sum(self.rewards_list)/len(self.rewards_list)
+        print(f'Total Average Rewards: {np.mean(self.rewards_list)}')
         x = np.arange(0, len(self.rewards_list), smoothing)
         x = np.append(x, len(self.rewards_list)-1)
         y = [np.average(self.rewards_list[x[i]:x[i+1]]) for i in range(len(x)-1)]
@@ -397,9 +398,9 @@ class ALG2(VanillaAgent):
         cols = cols.reshape(-1)
         best_actions = np.argmax(qtable[:, :, :, 0], axis=2).reshape(-1)
         variances = qtable[:, :, :, 2][rows, cols, best_actions]
-        # best_actions = best_actions.reshape(10,10)
         action_table = np.where(variances<threshold, best_actions, 4).reshape(10,10)
 
+        # Visualize a policy
         if threshold==5700:
             fig, ax = plt.subplots()
             ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
@@ -408,7 +409,15 @@ class ALG2(VanillaAgent):
         return action_table
     
     def threshold_rollout(self, num_episodes, max_thresh, thresh_spacing, qtable_f):
+        """
+        Will create a policy where the expert is called if the variance is greater than the threshold
+        This policy is rolled on the environment for num_episodes episodes and the average of the return is
+        plotted for each threshold.
+        num_episodes: Average return is calculated for each policy for num_episodes
+        qtable_f: filename for the qtable that must have been trained using the ALG2 class, shape (10,10,4,3)
+        """
         grid = ExpertGrid()
+        # For each state and action we have a q-value, 2nd reward moment and the variance using Bellman eqns
         qtable = np.load(qtable_f)
         thresh_rewards = []
         thresholds = []
@@ -434,6 +443,7 @@ class ALG2(VanillaAgent):
         thresholds = np.array(thresholds)
         np.savez(os.path.join(self.fname, 'thresholdrollout.npz'), thresh_rewards, thresholds)
 
+        # Visualizing the average return for every threshold
         fig, ax = plt.subplots()
         ax = sns.barplot(x=thresholds, y=thresh_rewards)
         ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
@@ -447,7 +457,6 @@ class ALG2(VanillaAgent):
 class MonteCarlo(VanillaAgent):
     def __init__(self, table_size, grid) -> None:
         super().__init__(table_size, grid)
-
 
     def learn(self, epdata):
         epdata['prev_state'].reverse()
@@ -467,7 +476,6 @@ class MonteCarlo(VanillaAgent):
             self.qtable[state[0], state[1], action, 0] = (mean*count + ret_to_go) / (count+1)
             self.qtable[state[0], state[1], action, 1] += 1
             self.qtable[state[0], state[1], action, 2] = new_var
-
         return
 
 
@@ -549,8 +557,8 @@ class MonteCarlo(VanillaAgent):
         return action
 
 
-# # Vanilla
-# grid = Grid()
+# # Vanilla Training
+grid = Grid()
 # dpath = 'Outputs/Vanilla/10M.5/test'
 # num_episodes = 10000000
 # ep_decay = 5e6
@@ -558,10 +566,7 @@ class MonteCarlo(VanillaAgent):
 # eps_start = 0.3
 # eps_end = 0.01
 
-# if not os.path.exists(dpath):
-#     os.makedirs(dpath)
-# else:
-#     raise Exception('This dpath already exists, be more careful dummy!')
+# os.makedirs(dpath)
 # agent = VanillaAgent([10,10,4], grid, dpath)
 # # agent.play(num_episodes, ep_decay, eps_start, eps_end)
 # agent.policy_rollout(1000, smoothing=1, qtable_path='Outputs/Vanilla/10M.5/qtable.npy')
@@ -593,7 +598,7 @@ class MonteCarlo(VanillaAgent):
 
 
 
-# # # ALG2
+# # # ALG2 Training
 # num_episodes = 10000000
 # ep_decay = 5e6
 # smoothing_num = 1000
@@ -602,10 +607,7 @@ class MonteCarlo(VanillaAgent):
 
 # grid = Grid()
 # dpath = 'Outputs/ALG2/10M.5' # Output folder name
-# if not os.path.exists(dpath):
-#     os.makedirs(dpath)
-# else:
-#     raise Exception('This dpath already exists, be more careful dummy!')
+# os.makedirs(dpath)
 # # The agent can take 4 actions and for each action it finds the q-value, 2nd reward moment
 # # and the variance of the returs using Bellmann Equations
 # agent = ALG2([10,10,4,3], grid, dpath)
@@ -627,6 +629,8 @@ agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.4')
 agent.threshold_rollout(1000, 8000, 100, 'Outputs/ALG2/10M.4/qtable.npy')
 
 
+
+# Learning rewards only by sampling
 # grid = Grid()
 # # The agent can take 4 actions and stores the mean of the return, count
 # # and variance of return for each (s,a) pair
