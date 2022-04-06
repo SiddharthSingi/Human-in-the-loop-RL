@@ -58,7 +58,6 @@ class Grid:
         self.done = False
         return obs
 
-
     def step(self, a):
         """
         action can be UP, DOWN, LEFT, RIGHT.
@@ -104,7 +103,6 @@ class Grid:
             new_state = np.copy(self.current_state)
             done = False
             
-
         # Check value of cell         
         else:
             cell = self.grid[new_state[0], new_state[1]]
@@ -113,20 +111,17 @@ class Grid:
                 reward += -102  # -100 for trap -2 for the step
                 done = True
                 
-
             # Reached an obstacle
             if cell == -1:  
                 reward += -5    # -3 for obstacle -2 for step
                 done = False
                 new_state = np.copy(self.current_state)
                 
-
             # Reached another empty cell
             if cell == 0:
                 reward += -2    # -2 for the step
                 done = False
                 
-
             # If goal state is reached
             if cell == 1:
                 reward += 98    # 100 for goal -2 for step
@@ -156,7 +151,6 @@ class ExpertGrid(Grid):
         action can be UP, DOWN, LEFT, RIGHT, CallExpert
         with action values 0,1,2,3,4
         """
-
         # Check to see if the episode has already ended
         assert self.done==False, "Episode has ended,\
              you should not call step again"
@@ -201,7 +195,6 @@ class ExpertGrid(Grid):
             reward += -2
             new_state = np.copy(self.current_state)
             done = False
-            
 
         # Check value of cell         
         else:
@@ -221,7 +214,6 @@ class ExpertGrid(Grid):
             if cell == 0:
                 reward += -2    # -2 for the step
                 done = False
-
 
             # If goal state is reached
             if cell == 1:
