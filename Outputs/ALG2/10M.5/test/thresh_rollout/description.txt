@@ -1,0 +1,2 @@
+self.grid_epsilon: 0.45
+expert penalty has been removed to check what happens

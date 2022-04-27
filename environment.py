@@ -38,13 +38,13 @@ class Grid:
         # start_states = [[1,2], [1,3], [2,4], [3,4], [4,2], [4,3], [2,1], [2,1], [3,1], [3,1], [4,4], [4,5],\
         #     [4,5], [4,6], [5,7], [6,7], [6,7], [7,6], [7,5], [7,4], [6,3], [5,3], \
         #     [0,0], [0,1], [0,2], [0,3], [1,0], [2,0], [3,0], [1,1]]
-        # start_states = [[2,4]]
+        # # start_states = [[2,4]]
         # self.possible_starts = np.array(start_states)
 
 
         # grid_epsilon is the probability that the action executed will be
         # different than the one passed to the environment
-        self.g_epsilon = 0.3
+        self.g_epsilon = 0.45
 
         self.action_space = 4
         self.done = False

@@ -1,3 +1,4 @@
+from statistics import variance
 from threading import currentThread
 from environment import Grid, ExpertGrid
 import numpy as np
@@ -113,7 +114,8 @@ class VanillaAgent():
         """
         
         if qtable_path:
-            self.qtable = np.load(qtable_path)
+            # The shape of this qtable [10,10,4]
+            self.qtable = np.load(qtable_path)[:,:,:,0]
         self.rewards_list.clear()
         fell_in_trap = 0
         ep_data = {'prev_state': [], 'reward': [], 'action': []}
@@ -154,6 +156,8 @@ class VanillaAgent():
         ax0.plot(x, y)
         os.makedirs(os.path.join(self.fname, 'MC'))
         ax0.text(1, 0.5, f'Fell in trap {fell_in_trap*100/num_episodes:.3f} % times', horizontalalignment='right',
+            verticalalignment='bottom', transform=ax0.transAxes)
+        ax0.text(1, 0.7, f'Total Average Rewards: {np.mean(self.rewards_list)}', horizontalalignment='right',
             verticalalignment='bottom', transform=ax0.transAxes)
         plt.savefig(os.path.join(self.fname, 'MC', 'rewards.jpg'), \
             bbox_inches ="tight",\
@@ -326,8 +330,7 @@ class ALG2(VanillaAgent):
         y = [np.average(self.rewards_list[x[i]:x[i+1]]) for i in range(len(x)-1)]
         x = x[:-1]
 
-        print('X: ', x, '\n')
-        print('Y: ', y)
+
         fig, ax0 = plt.subplots(figsize=(8,6))
         ax0.set_title('Rewards per episode')
         ax0.plot(x, y)
@@ -400,11 +403,11 @@ class ALG2(VanillaAgent):
         variances = qtable[:, :, :, 2][rows, cols, best_actions]
         action_table = np.where(variances<threshold, best_actions, 4).reshape(10,10)
 
-        # Visualize a policy
-        if threshold==5700:
-            fig, ax = plt.subplots()
-            ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
-            plt.show()
+        # # Visualize a policy
+        # if threshold==3800:
+        #     fig, ax = plt.subplots()
+        #     ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+        #     plt.show()
 
         return action_table
     
@@ -439,9 +442,22 @@ class ALG2(VanillaAgent):
             thresh_rewards.append(thresh_avg_reward)
             thresholds.append(thresh)
 
+
+        # Saving the thresholdeds and their returns
         thresh_rewards = np.array(thresh_rewards)
         thresholds = np.array(thresholds)
-        np.savez(os.path.join(self.fname, 'thresholdrollout.npz'), thresh_rewards, thresholds)
+        os.makedirs(os.path.join(self.fname, 'thresh_rollout'))
+        np.savez(os.path.join(self.fname, 'thresh_rollout', 'thresholdrollout.npz'), thresh_rewards, thresholds)
+
+
+        # Policy of the best threshold
+        high_threshold = thresholds[np.argmax(thresh_rewards)]
+        best_action_table = self.get_action_table(qtable, high_threshold)
+        fig, ax = plt.subplots()
+        ax = sns.heatmap(best_action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+        plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Best threshold policy.jpg'), \
+            bbox_inches ="tight",\
+            dpi=250)
 
         # Visualizing the average return for every threshold
         fig, ax = plt.subplots()
@@ -449,10 +465,109 @@ class ALG2(VanillaAgent):
         ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
         ax.set_xlabel('Thresholds')
         ax.set_ylabel('Average Return (1000 episodes)')
+        ax.text(1, 0.2, f'Best threshold: {high_threshold}\n Highest average return: {np.max(thresh_rewards)}', \
+            horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
         # ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-        plt.show()
+        plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Thresholded action returns.jpg'), \
+            bbox_inches ="tight",\
+            dpi=250)
 
         return
+
+    def return_vs_expert_calls(self, qtable_f, num_episodes=1000, viz=None):
+        """
+        We will rank the cells by variance values from ALG2, then find the rrturn for 1, 2, 3 ...
+        and so on number of expert calls. Then plot the return vs number of expert calls graph.
+        qtable_f: qtable filename
+        num_episodes: num of episodes you want to run for calculating average return with a\
+            particular action_table
+        viz: number_of_expert_calls at which you would like to visualize the table
+        """
+
+        
+        def get_actions(variance_arr, num_expert_calls):
+            """
+            Returns an action table where the actions of the top {num_expert_calls} cells by \
+                variance are changed to expert action
+            variance_arr: arr of (row_ind, col_ind, varaince, best_actions) sorted by variance
+            """
+
+            # num_expert_calls actions with highest variances are changed to the expert action
+            var_arr_copy = np.copy(variance_arr)
+            actions = np.copy(var_arr_copy[:, 3])
+            actions[-num_expert_calls:] = 4
+            var_arr_copy[:, 3] = actions
+
+            # lexsort will sort by rows first and then by columns and return its indices
+            new_action_table = var_arr_copy[np.lexsort((var_arr_copy[:,1], var_arr_copy[:,0]))][:,3].reshape(10, 10)
+            
+            # new_action_table will have the expert_action for the top {num_expert_calls} cells by variance\
+            # and best_actions for the remaining cells
+            return new_action_table
+
+
+        # Accessing the qtable to get the (row_ind, col_ind, varaince, best_actions) for each cell
+        qtable = np.load(qtable_f)
+        rows, columns = np.indices((10, 10))
+        rows = rows.reshape(-1, 1)
+        columns = columns.reshape(-1, 1)
+        best_actions = np.argmax(qtable[:, :, :, 0], axis=2).reshape(-1, 1)
+        variances = qtable[:, :, :, 2][rows, columns, best_actions].reshape(-1, 1)
+
+        # variance_arr will have (row_ind, col_ind, varaince, best_actions) sorted by variance
+        variance_arr = np.concatenate((rows, columns, variances, best_actions), axis=1)
+        variance_arr = variance_arr[variance_arr[:, 2].argsort()]
+        np.set_printoptions(precision=1, suppress=True)
+        print(variance_arr.shape)
+        
+        # maximum times we can call the expert on our grid (10*10 - obstacles - traps)
+        max_calls = 81
+        if viz is not None:
+            table = get_actions(variance_arr, viz)
+            fig, ax = plt.subplots()
+            ax = sns.heatmap(table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+            plt.show()
+
+
+        grid = ExpertGrid()
+        # This stores the [num of expert calls, avg return of many episodes] for different number of calls
+        avg_return_calls = []
+        for calls in range(1,max_calls):
+            action_table = get_actions(variance_arr, calls)
+            cur_table_rewards = []
+
+            for ep in range(num_episodes):
+                done = False
+                prev_obs = grid.reset()
+                tot_reward = 0
+                while not done:
+                    action = action_table[prev_obs[0], prev_obs[1]]
+                    obs, reward, done = grid.step(action)
+                    tot_reward+=reward
+                    prev_obs = obs
+                cur_table_rewards.append(tot_reward)
+            
+            avg_return_calls.append([calls, (sum(cur_table_rewards)/len(cur_table_rewards)) ])
+            # print('Expert calls, avg return: ', calls, (sum(cur_table_rewards)/len(cur_table_rewards)))
+
+        avg_return_calls = np.asarray(avg_return_calls)
+        returns = avg_return_calls[:,1]
+        calls = avg_return_calls[:,0]
+        fig, ax = plt.subplots()
+        ax.set_ylabel("Average return across 1000 episodes")
+        ax.set_xlabel("Number of expert calls made")
+        ax = sns.barplot(x=calls, y=returns)
+        ax.text(1, 0.2, f'Expert Penalty=-5', \
+            horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+        ax.set_xticks(np.arange(0, len(calls)+1, 10))
+
+        plt.show()
+            
+
+
+
+
+
 
 class MonteCarlo(VanillaAgent):
     def __init__(self, table_size, grid) -> None:
@@ -557,9 +672,9 @@ class MonteCarlo(VanillaAgent):
         return action
 
 
-# # Vanilla Training
-grid = Grid()
-# dpath = 'Outputs/Vanilla/10M.5/test'
+# # # Vanilla Training
+# grid = Grid()
+# dpath = 'Outputs/ALG2/10M.5/vanilla_rollout'
 # num_episodes = 10000000
 # ep_decay = 5e6
 # smoothing_num = 1000
@@ -569,7 +684,7 @@ grid = Grid()
 # os.makedirs(dpath)
 # agent = VanillaAgent([10,10,4], grid, dpath)
 # # agent.play(num_episodes, ep_decay, eps_start, eps_end)
-# agent.policy_rollout(1000, smoothing=1, qtable_path='Outputs/Vanilla/10M.5/qtable.npy')
+# agent.policy_rollout(100000, smoothing=1000, qtable_path='Outputs/ALG2/10M.5/qtable.npy')
 # print(repr(np.argmax(agent.qtable, axis=2)))
 
 # f = open(os.path.join(dpath, 'description.txt'), 'w')
@@ -578,13 +693,14 @@ grid = Grid()
 # smoothing num: {smoothing_num}\n \
 # eps_start: {eps_start} \
 # eps_end: {eps_end} \
-# starting_states: states 1 step away from trap.')
+# starting_states: all possible states.\n \
+# eps_2: {grid.g_epsilon}')
 # f.close()
 
 
 
 
-# ALG1
+# # ALG1
 # grid = ExpertGrid()
 # dpath = 'Outputs/ALG1/1M.6/test'
 # os.makedirs(dpath)
@@ -620,13 +736,16 @@ grid = Grid()
 # ep_decay: {ep_decay}\n \
 # eps_start: {eps_start}\n \
 # eps_end: {eps_end}\n\
-# starting_states: states 1 step away from trap, plus few top left states.')
+# starting_states: one step away from the traps, plus a few states in the top left corner.\n \
+# eps_2: {grid.g_epsilon}')
 # f.close()
 
 # Create the rewards plot with thresholding
 grid = ExpertGrid()
-agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.4')
-agent.threshold_rollout(1000, 8000, 100, 'Outputs/ALG2/10M.4/qtable.npy')
+agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.5/expert_calls')
+# agent.threshold_rollout(1000, 12000, 100, 'Outputs/ALG2/10M.5/qtable.npy')
+agent.return_vs_expert_calls('Outputs/ALG2/10M.5/qtable.npy', 1000, viz=20)
+
 
 
 

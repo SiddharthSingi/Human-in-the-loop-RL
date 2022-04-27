@@ -1,0 +1,8 @@
+ALG2 Training
+ episodes: 10000000
+ smoothing num: 1000
+ ep_decay: 5000000.0
+ eps_start: 0.4
+ eps_end: 0.01
+starting_states: one step away from the traps, plus a few states in the top left corner.
+ eps_2: 0.45
