@@ -1,0 +1,5 @@
+Vanilla Training
+ episodes: 10000000
+ smoothing num: 1000
+ eps_start: 0.3 eps_end: 0.01 starting_states: all possible states.
+ eps_2: 0.45

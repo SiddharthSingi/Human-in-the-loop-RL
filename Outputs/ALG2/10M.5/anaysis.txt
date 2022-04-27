@@ -1,0 +1,6 @@
+This is a great example of why the qtable values should make sense. Our best_action plot needs to be taking our agent away from the 
+traps. In this particular example, the top left cells have converged to an absurd action that keeps bringing the agent back to the
+same cell. When vanilla rolout was executed on this qtable values the std_dev, mean of return and the counts have all been spoiled because
+of this policy. A similar thing has happened in Sandip's memo where the best action plots keep making the agent oscillate between
+two cells
+This is one of the major reason why alg2 for sandip has been so significantly better than his vanilla agent.
