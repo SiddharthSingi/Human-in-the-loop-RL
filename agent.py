@@ -1,6 +1,4 @@
-from statistics import variance
-from threading import currentThread
-from environment import Grid, ExpertGrid
+from environment import Grid, ExpertGrid, TestGrid, TestExpertGrid
 import numpy as np
 from matplotlib import pyplot as plt
 import os
@@ -12,6 +10,7 @@ class VanillaAgent():
     def __init__(self, table_size, grid, dpath) -> None:
         
         self.qtable = np.zeros(shape=table_size)    # Q-Learning table
+        # Keeps a count of mean, count and variance during policy rollout
         self.rollout_tbl = np.zeros(shape=np.append(np.array(table_size), 3))
         self.grid = grid
         self.action_space = 4
@@ -115,10 +114,12 @@ class VanillaAgent():
         
         if qtable_path:
             # The shape of this qtable [10,10,4]
-            self.qtable = np.load(qtable_path)[:,:,:,0]
+            print(np.load(qtable_path).shape)
+            self.qtable = np.load(qtable_path)
         self.rewards_list.clear()
         fell_in_trap = 0
         ep_data = {'prev_state': [], 'reward': [], 'action': []}
+        ep_expert_calls = []
         for ep in range(num_episodes):
             done = False
             prev_obs = self.grid.reset()
@@ -128,8 +129,11 @@ class VanillaAgent():
             ep_data['action'] = []
             # print('episode: ', ep)
             tot_reward = 0
+            expert_called = 0
             while not done:
                 action = np.argmax(self.qtable[prev_obs[0], prev_obs[1], :])
+                if action==4:
+                    expert_called+=1
                 obs, reward, done = self.grid.step(action)
                 if reward < -100:
                     fell_in_trap+=1
@@ -142,6 +146,9 @@ class VanillaAgent():
                 prev_obs = obs
             self.rollout_update(ep_data)
             self.rewards_list.append(tot_reward)
+            ep_expert_calls.append(expert_called)
+
+        print('Average number of expert calls made: ', (sum(ep_expert_calls)/len(ep_expert_calls)))
 
         # Plot rewards
         # sum(self.rewards_list)/len(self.rewards_list)
@@ -157,8 +164,10 @@ class VanillaAgent():
         os.makedirs(os.path.join(self.fname, 'MC'))
         ax0.text(1, 0.5, f'Fell in trap {fell_in_trap*100/num_episodes:.3f} % times', horizontalalignment='right',
             verticalalignment='bottom', transform=ax0.transAxes)
-        ax0.text(1, 0.7, f'Total Average Rewards: {np.mean(self.rewards_list)}', horizontalalignment='right',
+        ax0.text(1, 0.3, f'Total Average Rewards: {np.mean(self.rewards_list)}', horizontalalignment='right',
             verticalalignment='bottom', transform=ax0.transAxes)
+        ax0.text(1, 0.1, f'Average number of expert calls: {(sum(ep_expert_calls)/len(ep_expert_calls))}', \
+            horizontalalignment='right', verticalalignment='bottom', transform=ax0.transAxes)
         plt.savefig(os.path.join(self.fname, 'MC', 'rewards.jpg'), \
             bbox_inches ="tight",\
             dpi=250)
@@ -230,14 +239,11 @@ class VanillaAgent():
             self.rollout_tbl[state[0], state[1], action, 1] += 1
             self.rollout_tbl[state[0], state[1], action, 2] = new_var
 
-
 class ALG1(VanillaAgent):
     def __init__(self, table_size, grid, fname) -> None:
         super().__init__(table_size, grid, fname)
         self.action_space = 5
         self.exploration_count = np.zeros((10, 10, 5))
-
-
 
 class ALG2(VanillaAgent):
     def __init__(self, table_size, grid, fname) -> None:
@@ -476,7 +482,7 @@ class ALG2(VanillaAgent):
 
     def return_vs_expert_calls(self, qtable_f, num_episodes=1000, viz=None):
         """
-        We will rank the cells by variance values from ALG2, then find the rrturn for 1, 2, 3 ...
+        We will rank the cells by variance values from ALG2, then find the return for 1, 2, 3 ...
         and so on number of expert calls. Then plot the return vs number of expert calls graph.
         qtable_f: qtable filename
         num_episodes: num of episodes you want to run for calculating average return with a\
@@ -489,7 +495,7 @@ class ALG2(VanillaAgent):
             """
             Returns an action table where the actions of the top {num_expert_calls} cells by \
                 variance are changed to expert action
-            variance_arr: arr of (row_ind, col_ind, varaince, best_actions) sorted by variance
+            variance_arr: arr of (row_ind, col_ind, varaince, best_actions) sorted in ascending by variance
             """
 
             # num_expert_calls actions with highest variances are changed to the expert action
@@ -521,7 +527,8 @@ class ALG2(VanillaAgent):
         print(variance_arr.shape)
         
         # maximum times we can call the expert on our grid (10*10 - obstacles - traps)
-        max_calls = 81
+        # Must be changed according to Grid
+        max_calls = 84
         if viz is not None:
             table = get_actions(variance_arr, viz)
             fig, ax = plt.subplots()
@@ -529,46 +536,55 @@ class ALG2(VanillaAgent):
             plt.show()
 
 
-        grid = ExpertGrid()
         # This stores the [num of expert calls, avg return of many episodes] for different number of calls
         avg_return_calls = []
         for calls in range(1,max_calls):
-            action_table = get_actions(variance_arr, calls)
+            action_table = get_actions(variance_arr, calls)            
             cur_table_rewards = []
-
+            print(calls)
+            ep_expert_calls = []
             for ep in range(num_episodes):
                 done = False
-                prev_obs = grid.reset()
+                prev_obs = self.grid.reset()
                 tot_reward = 0
+                expert_called = 0
                 while not done:
                     action = action_table[prev_obs[0], prev_obs[1]]
-                    obs, reward, done = grid.step(action)
+                    if action==4: 
+                        expert_called+=1
+                    obs, reward, done = self.grid.step(action)
                     tot_reward+=reward
                     prev_obs = obs
                 cur_table_rewards.append(tot_reward)
+                ep_expert_calls.append(expert_called)
             
-            avg_return_calls.append([calls, (sum(cur_table_rewards)/len(cur_table_rewards)) ])
-            # print('Expert calls, avg return: ', calls, (sum(cur_table_rewards)/len(cur_table_rewards)))
+            avg_return_calls.append([(sum(ep_expert_calls)/len(ep_expert_calls)), (sum(cur_table_rewards)/len(cur_table_rewards)) ])
+            # print('Expert calls, avg return: ', (sum(ep_expert_calls)/len(ep_expert_calls)), (sum(cur_table_rewards)/len(cur_table_rewards)))
 
         avg_return_calls = np.asarray(avg_return_calls)
+        avg_return_calls = avg_return_calls[avg_return_calls[:,0].argsort()]
         returns = avg_return_calls[:,1]
         calls = avg_return_calls[:,0]
-        fig, ax = plt.subplots()
+        print(calls)
+        print(returns)
+        fig, ax = plt.subplots(figsize=(10,10))
         ax.set_ylabel("Average return across 1000 episodes")
-        ax.set_xlabel("Number of expert calls made")
-        ax = sns.barplot(x=calls, y=returns)
-        ax.text(1, 0.2, f'Expert Penalty=-5', \
+        ax.set_xlabel("Average number of expert calls made per episode")
+        # sns.barplot(x=calls, y=returns)
+        plt.plot(calls, returns, 'bo-', label='ALG2', ms=2, linewidth=1)
+        ax.text(1, 0.2, f'Expert Penalty=0', \
             horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
-        ax.set_xticks(np.arange(0, len(calls)+1, 10))
+        # ax.set_xticks(np.arange(0, len(calls)+1, 10))
+
+        # Superimposing data from ALG1
+        y = np.array([44.4, 63.0, 64.0, 67.8, 74.5, 77.4])
+        x = np.array([2.5, 4.1, 4.5, 5.1, 7.6, 9.6])
+
+        plt.plot(x, y, 'rv-', label='ALG1', ms=2, linewidth=1)
+        plt.legend(loc='upper left')
 
         plt.show()
             
-
-
-
-
-
-
 class MonteCarlo(VanillaAgent):
     def __init__(self, table_size, grid) -> None:
         super().__init__(table_size, grid)
@@ -699,30 +715,44 @@ class MonteCarlo(VanillaAgent):
 
 
 
+# ALG1
+# grid = TestExpertGrid(0)
+# dpath = f'Outputs/ALG1/TestGrid/5M-3'
+# num_episodes = 5000000
+# ep_decay = 3e6
+# smoothing_num = 1000
+# eps_start = 0.6
+# eps_end = 0.07
 
-# # ALG1
-# grid = ExpertGrid()
-# dpath = 'Outputs/ALG1/1M.6/test'
 # os.makedirs(dpath)
 
 # # Our agent has 5 possible actions hence the q table size is 10,10,5
 # agent = ALG1([10,10,5], grid, dpath)
-# # agent.play(800000, 400000, 0.6, 0.07)
-# agent.policy_rollout(1000, 1, qtable_path='Outputs/ALG1/1M.6/qtable.npy')
-# print(repr(np.argmax(agent.qtable, axis=2)))
+# agent.play(num_episodes, ep_decay, eps_start, eps_end)
+# agent.policy_rollout(10000, 500, qtable_path='Outputs/ALG1/TestGrid/5M-3/qtable.npy')
+
+# f = open(os.path.join(dpath, 'description.txt'), 'w')
+# f.write(f'ALG1 Training on needling test grid\n \
+# episodes: {num_episodes}\n \
+# smoothing num: {smoothing_num}\n \
+# eps_start: {eps_start} \
+# eps_end: {eps_end} \n \
+# starting_states: one step away from traps.\n \
+# eps_2: {grid.g_epsilon}\n \
+# expert penalty: {-20}\n')
+# f.close()
 
 
 
-
-# # # ALG2 Training
-# num_episodes = 10000000
-# ep_decay = 5e6
+# # ALG2 Training
+# num_episodes = 5000000
+# ep_decay = 3e6
 # smoothing_num = 1000
-# eps_start = 0.4
-# eps_end = 0.01
+# eps_start = 0.5
+# eps_end = 0.05
 
-# grid = Grid()
-# dpath = 'Outputs/ALG2/10M.5' # Output folder name
+# grid = TestGrid()
+# dpath = 'Outputs/ALG2/TestGrid/5M.1' # Output folder name
 # os.makedirs(dpath)
 # # The agent can take 4 actions and for each action it finds the q-value, 2nd reward moment
 # # and the variance of the returs using Bellmann Equations
@@ -736,15 +766,16 @@ class MonteCarlo(VanillaAgent):
 # ep_decay: {ep_decay}\n \
 # eps_start: {eps_start}\n \
 # eps_end: {eps_end}\n\
-# starting_states: one step away from the traps, plus a few states in the top left corner.\n \
-# eps_2: {grid.g_epsilon}')
+# starting_states: top 2 rows.\n \
+# eps_2: {grid.g_epsilon} \n \
+# New Grid structure.')
 # f.close()
 
 # Create the rewards plot with thresholding
-grid = ExpertGrid()
-agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.5/expert_calls')
+grid = TestExpertGrid(0)
+agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/TestGrid/5M.1')
 # agent.threshold_rollout(1000, 12000, 100, 'Outputs/ALG2/10M.5/qtable.npy')
-agent.return_vs_expert_calls('Outputs/ALG2/10M.5/qtable.npy', 1000, viz=20)
+agent.return_vs_expert_calls('Outputs/ALG2/TestGrid/5M.1/qtable.npy', 1000, viz=79)
 
 
 

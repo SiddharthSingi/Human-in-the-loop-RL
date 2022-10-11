@@ -1,0 +1,9 @@
+ALG2 Training
+ episodes: 1000000
+ smoothing num: 1000
+ ep_decay: 60000
+ eps_start: 0.4
+ eps_end: 0.05
+starting_states: one step away from the traps, plus a few states in the top left corner.
+ eps_2: 0.45 
+ New Grid structure.

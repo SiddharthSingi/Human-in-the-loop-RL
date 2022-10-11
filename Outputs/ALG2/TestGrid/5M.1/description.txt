@@ -1,0 +1,9 @@
+ALG2 Training
+ episodes: 5000000
+ smoothing num: 1000
+ ep_decay: 3000000.0
+ eps_start: 0.5
+ eps_end: 0.05
+starting_states: top 2 rows.
+ eps_2: 0.45 
+ New Grid structure.
