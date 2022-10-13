@@ -245,6 +245,28 @@ class ALG1(VanillaAgent):
         self.action_space = 5
         self.exploration_count = np.zeros((10, 10, 5))
 
+    def return_vs_expert_calls(self, alg1_data):
+
+        # Data for Old Grid
+        y = np.array([79.5, 75.7, 70.2, 61.4, 58.1])
+        x = np.array([8.8, 7.1, 4.7, 1.9, 0.5])
+        expert_penalties = [-3, -5, -10, -18, -25]
+
+        # Data for New Grid
+        y = np.array([44.4, 63.0, 64.0, 67.8, 74.5, 77.4])
+        x = np.array([2.5, 4.1, 4.5, 5.1, 7.6, 9.6])
+        expert_penalties = np.array([-20, -15, -25, -10, -5, -3])
+
+        fig, ax = plt.subplots()
+        plt.plot(x, y, 'bo-')
+        ax.set_ylabel('Average Return (10000 episodes)')
+        ax.set_xlabel('Average number of expert calls (Expert Penalty)')
+        for i, label in enumerate(expert_penalties):
+            plt.annotate(label, (x[i]+0.2, y[i]))
+        # ax.set_xticklabels(['0.5 (-25)','1.9 (-18)','4.7 (-10)','7.1 (-5)', '8.8 (-3)'])
+        plt.show()
+        return
+
 class ALG2(VanillaAgent):
     def __init__(self, table_size, grid, fname) -> None:
         super().__init__(table_size, grid, fname)
@@ -528,7 +550,7 @@ class ALG2(VanillaAgent):
         
         # maximum times we can call the expert on our grid (10*10 - obstacles - traps)
         # Must be changed according to Grid
-        max_calls = 84
+        max_calls = 81
         if viz is not None:
             table = get_actions(variance_arr, viz)
             fig, ax = plt.subplots()
@@ -563,6 +585,7 @@ class ALG2(VanillaAgent):
 
         avg_return_calls = np.asarray(avg_return_calls)
         avg_return_calls = avg_return_calls[avg_return_calls[:,0].argsort()]
+
         returns = avg_return_calls[:,1]
         calls = avg_return_calls[:,0]
         print(calls)
@@ -570,21 +593,25 @@ class ALG2(VanillaAgent):
         fig, ax = plt.subplots(figsize=(10,10))
         ax.set_ylabel("Average return across 1000 episodes")
         ax.set_xlabel("Average number of expert calls made per episode")
+        ax.set_title('Average Return vs Expert calls for Old Grid')
         # sns.barplot(x=calls, y=returns)
         plt.plot(calls, returns, 'bo-', label='ALG2', ms=2, linewidth=1)
-        ax.text(1, 0.2, f'Expert Penalty=0', \
+        ax.text(0.95, 0.2, f'Expert Penalty=0', \
             horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
         # ax.set_xticks(np.arange(0, len(calls)+1, 10))
 
         # Superimposing data from ALG1
-        y = np.array([44.4, 63.0, 64.0, 67.8, 74.5, 77.4])
-        x = np.array([2.5, 4.1, 4.5, 5.1, 7.6, 9.6])
+        y = np.array([79.5, 75.7, 70.2, 61.4, 58.1])
+        x = np.array([8.8, 7.1, 4.7, 1.9, 0.5])
+        expert_penalties = [-3, -5, -10, -18, -25]
 
         plt.plot(x, y, 'rv-', label='ALG1', ms=2, linewidth=1)
+        for i, label in enumerate(expert_penalties):
+            plt.annotate(label, (x[i]+0.2, y[i]))
         plt.legend(loc='upper left')
-
         plt.show()
-            
+
+
 class MonteCarlo(VanillaAgent):
     def __init__(self, table_size, grid) -> None:
         super().__init__(table_size, grid)
@@ -772,10 +799,11 @@ class MonteCarlo(VanillaAgent):
 # f.close()
 
 # Create the rewards plot with thresholding
-grid = TestExpertGrid(0)
-agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/TestGrid/5M.1')
+grid = ExpertGrid(0)
+agent = ALG2([10,10,4,3], grid, 'Outputs/ALG2/10M.5')
 # agent.threshold_rollout(1000, 12000, 100, 'Outputs/ALG2/10M.5/qtable.npy')
-agent.return_vs_expert_calls('Outputs/ALG2/TestGrid/5M.1/qtable.npy', 1000, viz=79)
+agent.return_vs_expert_calls('Outputs/ALG2/10M.5/qtable.npy', 1000, viz=79)
+# 10M.5/qtable.npy
 
 
 
