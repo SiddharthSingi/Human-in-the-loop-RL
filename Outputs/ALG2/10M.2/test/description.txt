@@ -1,0 +1,8 @@
+eps_start: 0.25
+eps_end: 0.01
+ep_decay: 5e6
+trained for 10e6
+
+retrained for 1M with
+ep_start: 0.25
+ep_end:0.01

@@ -358,7 +358,6 @@ class ALG2(VanillaAgent):
         y = [np.average(self.rewards_list[x[i]:x[i+1]]) for i in range(len(x)-1)]
         x = x[:-1]
 
-
         fig, ax0 = plt.subplots(figsize=(8,6))
         ax0.set_title('Rewards per episode')
         ax0.plot(x, y)

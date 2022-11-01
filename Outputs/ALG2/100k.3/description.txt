@@ -1,0 +1,8 @@
+ALG2 Training
+ episodes: 100000
+ smoothing num: 1000
+ ep_decay: 60000
+ eps_start: 0.4
+ eps_end: 0.01
+starting_states: [[2,4], [3,4]].
+ eps_2: 0.45

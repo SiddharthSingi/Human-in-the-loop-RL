@@ -1,0 +1,4 @@
+Vanilla Training
+episodes: 1M
+smoothing num: 1000
+starting_states: all possible states

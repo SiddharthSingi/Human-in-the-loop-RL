@@ -1,0 +1,5 @@
+ALG2 Training
+ episodes: 1000000
+ smoothing num: 1000
+ eps_start: 0.25 eps_end: 0.01 
+starting_states: states 1 step away from trap.
