@@ -28,8 +28,8 @@ class Replay_Memory():
             posns_next, dones = map(torch.stack, zip(*batch))
 
         # Returning state and next_state in the format that is acceptable to the model
-        states = [patches_cur, posns_cur]
-        next_states = [patches_next, posns_next]
+        states = [patches_cur.float(), posns_cur.float()]
+        next_states = [patches_next.float(), posns_next.float()]
 
         return (states, actions.squeeze(), rewards.squeeze(), next_states, dones.squeeze())
 

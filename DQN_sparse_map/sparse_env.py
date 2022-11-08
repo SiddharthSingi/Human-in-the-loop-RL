@@ -5,16 +5,17 @@ import matplotlib.pyplot as plt
 np.set_printoptions(threshold=sys.maxsize)
 
 class Grid:
-    def __init__(self, expert_penalty=-5, patch_size = 3, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
+    def __init__(self, expert_penalty=-5, patch_size = 5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
 
-        self.grid = np.zeros((40,40))
+        self.grid = np.zeros((25,20))
         # Obstacle
-        self.grid[10:30, 10:30] = -1
-        self.grid[20, 10:25] = 0
+        self.grid[5:14, 6:14] = -1
+        self.grid[8:11, 6:12] = 0
+        self.grid[17:20, 6:14] = -1
         # Trap
-        self.grid[35:40, 10:30] = -2
+        # self.grid[35:40, 10:30] = -2
         # Goal
-        self.grid[20, 39] = 1
+        self.grid[5:20, 19] = 1
 
         # Array of all possible start positions for the agent
         self.possible_starts = np.where(self.grid==0)
@@ -29,7 +30,7 @@ class Grid:
         self.patch_size = patch_size
 
         # Grid epsilon
-        self.g_epsilon = 0.30
+        self.g_epsilon = 0.00
 
         self.expertaction = a = np.load(expert_map_f)
         self.expert_penalty = expert_penalty
@@ -54,6 +55,16 @@ class Grid:
         ax = sns.heatmap(map, annot=True, fmt=".2g", cmap='cool', linewidths=.5)
         plt.show()
 
+    def disp_actions(grid):
+
+        num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1'}
+        f = np.vectorize(lambda x: num_to_arrow[x])
+        arrows = f(grid)
+
+        fig, ax = plt.subplots()
+        ax = sns.heatmap(grid, annot=arrows, fmt="s", cmap='cool', linewidths=.5)
+        plt.show()
+
     def reset(self, test=None):
         '''
         test: Optional param to start the episode at a particular cell position
@@ -71,9 +82,8 @@ class Grid:
     def yx_to_obs(self, yx):
         '''
         Our observable space for the agent are the n^2 blocks around it (including the current x, y)
-        These 9 blocks will be represented as 4 feature maps, each map being a one hot encoded map of
-        empty space, obstacles, traps and goal.
-        Apart from this we will also be giving the x and y values as input
+        These n^2 blocks will be represented as 1 feature map, where obstacles and boundary wall
+        will be represented as -1, empty cell as 0 and goal cells as 1
 
         params: 
             yx: [index of cell in the grid]
@@ -97,6 +107,8 @@ class Grid:
         # self.patch_size
         patch = self.padded_grid[y-s+n:y+s+1+n, x-s+n:x+s+1+n]
 
+        '''
+        Use this if you want to use feature maps for obstacles, traps, goals etc
         # Creating our feature maps
         empties = np.zeros_like(patch)
         empties[patch==0] = 1
@@ -111,7 +123,9 @@ class Grid:
         goals[patch==1] = 1
 
         obs_maps = np.stack((empties, obstacles, traps, goals), axis=0).astype('f')
-        return [obs_maps, np.array((y, x)).astype('f')]
+        '''
+        
+        return [np.expand_dims(patch, axis=0), np.array((y, x)).astype('f')]
 
     def step(self, a: int) -> None:
         """
@@ -173,9 +187,10 @@ class Grid:
 
 
 # This code will also be run when importing this file
-# gridtest = Grid(patch_size=5)
-# gridtest.viz_grid('expert')
-# obs = gridtest.reset([19,39])
+gridtest = Grid(patch_size=5)
+gridtest.viz_grid('obstacles')
+obs = gridtest.reset([1,8])
+print(obs)
 # new_obs, reward, done = gridtest.step(0)
 
 # np.set_printoptions(threshold=sys.maxsize)

@@ -65,29 +65,27 @@ class NeuralNet(nn.Module):
   def __init__(self):
     super().__init__()
 
-    self.conv1 = nn.Sequential(
-      nn.Conv2d(4, 1, 1),
-      nn.BatchNorm2d(1),
+    self.linear1 = nn.Sequential(
+      nn.Flatten(),
+      nn.Linear(25, 12),
+      nn.BatchNorm1d(12),
       nn.ReLU()
     )
 
-    self.linear = nn.Sequential(
-      nn.Flatten(),
-      nn.Linear(25, 12),
-      nn.ReLU(),
-      nn.Linear(12, 4)
+    self.linear2 = nn.Sequential(
+      nn.Linear(12, 8),
+      nn.BatchNorm1d(8),
+      nn.ReLU()
     )
 
-    self.posn_linear = nn.Sequential(
-      nn.Linear(2, 8),
-      nn.ReLU(),
-      nn.Linear(8,4)
+    self.linear3 = nn.Sequential(
+      nn.Linear(8, 8),
+      nn.BatchNorm1d(8),
+      nn.ReLU()
     )
 
-    self.mixed_linear = nn.Sequential(
-      nn.Linear(4, 4),
-      nn.ReLU(),
-      nn.Linear(4, 4)
+    self.linear4 = nn.Sequential(
+      nn.Linear(8, 4)
     )
 
   def forward(self, state):
@@ -99,10 +97,10 @@ class NeuralNet(nn.Module):
     '''
     patches = state[0]
     posns = state[1]
-    
-    x1 = self.conv1(patches) # Shape: Nx1x5x5
-    x1 = self.linear(x1) # Shape: Nx4
-    x2 = self.posn_linear(posns) # Shape: Nx4
-    x = x1+x2
-    x = self.mixed_linear(x) # Shape: Nx4
+
+    x = self.linear1(patches)
+    x = self.linear2(x)
+    x = self.linear3(x)
+    x = self.linear4(x)
+
     return x

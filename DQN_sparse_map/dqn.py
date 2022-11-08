@@ -49,8 +49,11 @@ class QNet():
 		'''
 		patch = torch.from_numpy(np.expand_dims(state[0], axis=0)).to(self.device)
 		posn = torch.from_numpy(np.expand_dims(state[1], axis=0)).to(self.device)
-		x = [patch, posn]
-		qvalues = self.model(x).view(-1)
+		x = [patch.float(), posn.float()]
+
+		self.model.eval()	# Will notify batchnorm layers to work in eval mode
+		with torch.no_grad():
+			qvalues = self.model(x).view(-1)
 
 		if random.random() < epsilon:
 			action = np.random.randint(self.nA)
@@ -119,7 +122,7 @@ class DQN_Agent():
 		self.env = env
 		self.test_env = test_env
 		self.nA = 4
-		self.alg2 = alg2 # boolean to v
+		self.alg2 = alg2 
 		self.device = device
 		self.logdir = logdir
 		model_f = os.path.join(self.logdir, 'models')
@@ -153,6 +156,11 @@ class DQN_Agent():
 		Samples experiences from replay buffer. 
 		Train the Q, M, V models based on if self.alg2 is True
 		'''
+
+		# Setting all models to train mode
+		self.Q.model.train()
+		self.M.model.train()
+		self.V.model.train()
 
 		# Sample minibatch as tensors
 		states, actions, rewards, next_states, dones = self.memory.sample_batch()
@@ -214,7 +222,7 @@ class DQN_Agent():
 		return QLoss.item(), MLoss.item(), VLoss.item()
 
 	def train(self, num_episodes, decay_ep=False, eps_start=0.5, eps_end = 0.05, learn_freq=1000,\
-		target_freq=10000, save_freq=200, eval_freq=10000, initial_learn = 1000):
+		target_freq=10000, save_freq=200, eval_freq=10000, initial_learn = 1000, maxlen=200):
 		'''
 		Train DQN by decaying exploration scheme with target networks and replay buffer
 
@@ -264,10 +272,8 @@ class DQN_Agent():
 				total_reward += reward
 				ep_l += 1
 				self.env.visited[int(state[1][0]), int(state[1][1])] += 1
-
-				# # TODO: Add a max length that the agent can take
-				# if ep_l==max_len:
-				# 	done = False
+				if ep_l==maxlen:
+					done = False
 
 				if t % learn_freq == 0:
 					# This will sample experiences from replay buffer and train the models.
@@ -306,8 +312,13 @@ class DQN_Agent():
 		'''
 		Will plot the variance, best actions and state visitations using Q and V models
 		'''
+
+		# Setting all models to eval mode
+		self.Q.model.eval()
+		self.V.model.eval()
+
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((40,40))
+		rows, cols = np.indices((25,20))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -320,16 +331,14 @@ class DQN_Agent():
 									zip(*all_states))
 
 		# [Tensor_of_shape(1600, 4, 3, 3), Tensor_of_shape(1600, 2)]
-		all_state_tensors = [all_patches, all_posns]
+		all_state_tensors = [all_patches.float(), all_posns.float()]
 
 		# Q values and best actions
 		qvalues = self.Q.model(all_state_tensors)
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
-
-
 		# Plotting Best actions
-		best_actions_map = np.zeros((40,40))
+		best_actions_map = np.zeros((25,20))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
@@ -348,7 +357,7 @@ class DQN_Agent():
 
 		# Plotting Variances of every state
 		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(1600), best_actions].reshape(40,40)
+		variances = variances[torch.arange(500), best_actions].reshape(25,20)
 
 		# These states either have obstacles, traps or goals and their variance values
 		# do not make any sense. Need to be zeroed

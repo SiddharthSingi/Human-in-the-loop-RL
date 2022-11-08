@@ -38,8 +38,5 @@ def main(args):
 	variances, best_actions, state_visitation = DQN.evaluate_agent()
 	DQN.plotLosses(ep_lengths, ep_rewards, Losses)
 
-
-
-
 if __name__ == '__main__':
 	main(sys.argv)
