@@ -273,7 +273,7 @@ class DQN_Agent():
 				ep_l += 1
 				self.env.visited[int(state[1][0]), int(state[1][1])] += 1
 				if ep_l==maxlen:
-					done = False
+					done = True
 
 				if t % learn_freq == 0:
 					# This will sample experiences from replay buffer and train the models.
@@ -282,7 +282,7 @@ class DQN_Agent():
 					Losses['M'].append(mloss)
 					Losses['V'].append(vloss)
 					Losses['timestep'].append(t)
-					print(f'Learning. Qloss: {qloss}, Mloss: {mloss}, VLoss: {vloss}, timestep: {t}')
+					# print(f'Learning. Qloss: {qloss}, Mloss: {mloss}, VLoss: {vloss}, timestep: {t}')
 
 				if t % eval_freq == 0:
 					# print(Losses)
@@ -318,7 +318,7 @@ class DQN_Agent():
 		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((25,20))
+		rows, cols = np.indices((15,20))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -338,7 +338,7 @@ class DQN_Agent():
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
-		best_actions_map = np.zeros((25,20))
+		best_actions_map = np.zeros((15,20))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
@@ -353,11 +353,9 @@ class DQN_Agent():
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Best_actions.jpg'))
 		# plt.show()
 
-
-
 		# Plotting Variances of every state
 		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(500), best_actions].reshape(25,20)
+		variances = variances[torch.arange(300), best_actions].reshape(15,20)
 
 		# These states either have obstacles, traps or goals and their variance values
 		# do not make any sense. Need to be zeroed
@@ -405,11 +403,11 @@ class DQN_Agent():
 		x = np.arange(0, len(ep_rewards), smoothing_number)
 		x = np.append(x, len(ep_rewards)-1)
 		y = [np.average(ep_rewards[x[i]:x[i+1]]) for i in range(len(x)-1)]
-		x = x[:-1]
+		x = x[1:]
 
 		fig, ax0 = plt.subplots(figsize=(8,6))
 		ax0.set_title('Rewards per episode')
-		ax0.plot(np.arange(len(ep_rewards)), ep_rewards)	# Smoothing is currently been removed
+		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'rewards.jpg'), \
 			bbox_inches ="tight",\
 			dpi=250)
@@ -420,11 +418,11 @@ class DQN_Agent():
 		x = np.arange(0, len(ep_lenghts), smoothing_number)
 		x = np.append(x, len(ep_lenghts)-1)
 		y = [np.average(ep_lenghts[x[i]:x[i+1]]) for i in range(len(x)-1)]
-		x = x[:-1]
+		x = x[1:]
 
 		fig, ax0 = plt.subplots(figsize=(8,6))
 		ax0.set_title('Episode Lengths')
-		ax0.plot(np.arange(len(ep_lenghts)), ep_lenghts)	# Smoothing is currently been removed
+		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'lengths.jpg'), \
 			bbox_inches ="tight",\
 			dpi=250)

@@ -7,19 +7,22 @@ np.set_printoptions(threshold=sys.maxsize)
 class Grid:
     def __init__(self, expert_penalty=-5, patch_size = 5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
 
-        self.grid = np.zeros((25,20))
+        self.grid = np.zeros((15,20))
         # Obstacle
-        self.grid[5:14, 6:14] = -1
-        self.grid[8:11, 6:12] = 0
-        self.grid[17:20, 6:14] = -1
+        self.grid[0:9, 6:14] = -1
+        self.grid[3:6, 6:12] = 0
+        self.grid[12:215, 6:14] = -1
         # Trap
         # self.grid[35:40, 10:30] = -2
         # Goal
-        self.grid[5:20, 19] = 1
+        self.grid[0:15, 19] = 1
 
         # Array of all possible start positions for the agent
         self.possible_starts = np.where(self.grid==0)
         self.possible_starts = np.vstack((self.possible_starts[0], self.possible_starts[1])).T
+
+        self.possible_starts = [[i, j] for i in range(15) for j in [4,5,14,15]]
+
 
         # Used in the step function
         self.action_add = np.array(
