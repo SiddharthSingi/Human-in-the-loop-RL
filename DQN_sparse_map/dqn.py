@@ -318,19 +318,19 @@ class DQN_Agent():
 		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((15,20))
+		rows, cols = np.indices((15,13))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
 
-		# Will give a list of 1600 elements, each having the patch and posn of all cells in the grid
+		# Will give a list of 210 elements, each having the patch and posn of all cells in the grid
 		all_states = list(map(lambda x: self.env.yx_to_obs(x), posns))
 
 		# Will convert all patches and posns into one tensor each to be passed to the models
 		all_patches, all_posns = map(lambda x: torch.from_numpy(np.stack(x)).to(self.device), \
 									zip(*all_states))
 
-		# [Tensor_of_shape(1600, 4, 3, 3), Tensor_of_shape(1600, 2)]
+		# [Tensor_of_shape(210, 4, 3, 3), Tensor_of_shape(210, 2)]
 		all_state_tensors = [all_patches.float(), all_posns.float()]
 
 		# Q values and best actions
@@ -338,7 +338,7 @@ class DQN_Agent():
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
-		best_actions_map = np.zeros((15,20))
+		best_actions_map = np.zeros((15,13))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
@@ -346,16 +346,21 @@ class DQN_Agent():
 		obstacle_x, obstacle_y = np.where(self.env.grid!=0)
 		best_actions_map[obstacle_x, obstacle_y] = -1
 
+		# Convert to arrows instead of numbers
+		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1'}
+		f = np.vectorize(lambda x: num_to_arrow[x])
+		arrows = f(best_actions_map)
+
 		fig, ax = plt.subplots(figsize=(8,8))
 		ax.set_title('Best action in each state')
 		np.save(os.path.join(self.logdir, 'Plots', 'Best_actions.npy'), best_actions_map)
-		ax = sns.heatmap(best_actions_map, annot=True, fmt=".1g", cmap='cool', linewidths=1)
+		ax = sns.heatmap(best_actions_map, annot=arrows, fmt="s", cmap='cool', linewidths=.5)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Best_actions.jpg'))
 		# plt.show()
 
 		# Plotting Variances of every state
 		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(300), best_actions].reshape(15,20)
+		variances = variances[torch.arange(195), best_actions].reshape(15,13)
 
 		# These states either have obstacles, traps or goals and their variance values
 		# do not make any sense. Need to be zeroed
@@ -368,8 +373,6 @@ class DQN_Agent():
 		np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Variances.jpg'))
 		# plt.show()
-
-
 
 		# Plotting state visitation
 		fig, ax = plt.subplots(figsize=(20,20))
@@ -399,7 +402,7 @@ class DQN_Agent():
 		plt.close('all')	# Close previous plt figures to avoid memory error
 		# Visualizations
 		# Plotting Rewards
-		smoothing_number = 10
+		smoothing_number = 100
 		x = np.arange(0, len(ep_rewards), smoothing_number)
 		x = np.append(x, len(ep_rewards)-1)
 		y = [np.average(ep_rewards[x[i]:x[i+1]]) for i in range(len(x)-1)]
