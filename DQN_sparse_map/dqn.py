@@ -118,7 +118,7 @@ class DQN_Agent():
 	'''
 
 	def __init__(self, env, test_env, lr, device, burn_in=50, gamma=0.9, batch_size=64, alg2=True,\
-					replay_mem=2000, logdir = 'DQN_sparse_map/'):
+					replay_mem=2000, logdir = 'DQN_sparse_map/', lr_v=1e-4):
 		self.env = env
 		self.test_env = test_env
 		self.nA = 4
@@ -140,7 +140,7 @@ class DQN_Agent():
 		if alg2:
 			self.M = MNet(self.device, lr, model_f)
 			self.target_M = MNet(self.device, lr, model_f)
-			self.V = VNet(self.device, lr, model_f)
+			self.V = VNet(self.device, lr_v, model_f)
 
 		self.training_episodes = 50
 		self.trained_episodes = 0
