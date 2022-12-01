@@ -492,7 +492,7 @@ class DQN_Agent():
 	
 		return
 
-	def offline_training(self, m_learn, vlearn):
+	def offline_training(self, m_learn, vlearn, smoothing_number):
 		'''
 		Trains and plots the M and V models offline at the end
 		mlearn: number of times to call learn to train M model
@@ -683,7 +683,6 @@ class DQN_Agent():
 		# Visualizations
 
 		# Plotting M Losses
-		smoothing_number = 30
 		x = np.arange(0, len(M_losses), smoothing_number)
 		x = np.append(x, len(M_losses))
 		y = [np.average(M_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]
@@ -698,7 +697,6 @@ class DQN_Agent():
 
 
 		# Plotting V Losses
-		smoothing_number = 50
 		x = np.arange(0, len(V_losses), smoothing_number)
 		x = np.append(x, len(V_losses))
 		y = [np.average(V_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]

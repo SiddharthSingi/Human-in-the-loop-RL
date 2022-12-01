@@ -64,7 +64,7 @@ def main(args):
 	DQN.plotLosses(ep_lengths, ep_rewards, Losses)
 
 	# Training M and V models at the end
-	DQN.offline_training(1000, 1000)
+	DQN.offline_training(1000, 1000, smoothing_number=30)
 
 if __name__ == '__main__':
 	main(sys.argv)
