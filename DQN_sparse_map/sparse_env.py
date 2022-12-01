@@ -178,7 +178,7 @@ class Grid:
                 
             # If goal state is reached
             if cell == 1:
-                reward += 100    # 100 for goal
+                reward += 200    # 100 for goal
                 done = True
 
         new_obs = self.yx_to_obs(new_state.astype('int'))

@@ -8,6 +8,7 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 from neural_model import NeuralNet
 from replay import Replay_Memory
+from sparse_env import Grid
 
 class QNet():
 	# The network should take in state of the world as an input,
@@ -74,6 +75,11 @@ class MNet():
 		self.model = NeuralNet()
 		self.model_op = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 		self.model.to(device)
+
+	def load_model(self, model_file):
+		# Helper function to load an existing model.
+		# e.g.: torch.save(self.model.state_dict(), model_file)
+		self.model.load_state_dict(torch.load(model_file))
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
@@ -398,13 +404,20 @@ class DQN_Agent():
 				state = next_state
 
 	def plotLosses(self, ep_lenghts, ep_rewards, Losses):
+		'''
+		Plots
+			Rewards
+			Episode length
+			Q, M, V Losses
+				vs episode number
+		'''
 		
 		plt.close('all')	# Close previous plt figures to avoid memory error
 		# Visualizations
 		# Plotting Rewards
 		smoothing_number = 100
 		x = np.arange(0, len(ep_rewards), smoothing_number)
-		x = np.append(x, len(ep_rewards)-1)
+		x = np.append(x, len(ep_rewards))
 		y = [np.average(ep_rewards[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
@@ -419,7 +432,7 @@ class DQN_Agent():
 
 		# Plotting Episode Lengths
 		x = np.arange(0, len(ep_lenghts), smoothing_number)
-		x = np.append(x, len(ep_lenghts)-1)
+		x = np.append(x, len(ep_lenghts))
 		y = [np.average(ep_lenghts[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
@@ -433,8 +446,16 @@ class DQN_Agent():
 
 
 		# Plotting Losses
+		smoothing_number = 50
+
 		fig, ax = plt.subplots(figsize=(8,8))
-		sns.lineplot(x=Losses['timestep'], y=Losses['Q'])
+		plotlist = Losses['Q']
+		x = np.arange(0, len(plotlist), smoothing_number)
+		x = np.append(x, len(plotlist))
+		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		x = x[1:]
+		sns.color_palette('muted')
+		sns.lineplot(x=x, y=y)
 		ax.set_title('Q Losses')
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'QLosses.jpg'), \
 			bbox_inches ="tight",\
@@ -442,7 +463,13 @@ class DQN_Agent():
 		# plt.show()
 
 		fig, ax = plt.subplots(figsize=(8,8))
-		sns.lineplot(x=Losses['timestep'], y=Losses['M'])
+		plotlist = Losses['M']
+		x = np.arange(0, len(plotlist), smoothing_number)
+		x = np.append(x, len(plotlist))
+		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		x = x[1:]
+		sns.color_palette('muted')
+		sns.lineplot(x=x, y=y)
 		ax.set_title('M Losses')
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'MLosses.jpg'), \
 			bbox_inches ="tight",\
@@ -450,7 +477,13 @@ class DQN_Agent():
 		# plt.show()
 
 		fig, ax = plt.subplots(figsize=(8,8))
-		sns.lineplot(x=Losses['timestep'], y=Losses['V'])
+		plotlist = Losses['V']
+		x = np.arange(0, len(plotlist), smoothing_number)
+		x = np.append(x, len(plotlist))
+		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		x = x[1:]
+		sns.color_palette('muted')
+		sns.lineplot(x=x, y=y)
 		ax.set_title('V Losses')
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'VLosses.jpg'), \
 			bbox_inches ="tight",\
@@ -458,3 +491,288 @@ class DQN_Agent():
 		# plt.show()
 	
 		return
+
+	def offline_training(self, m_learn, vlearn):
+		'''
+		Trains and plots the M and V models offline at the end
+		mlearn: number of times to call learn to train M model
+		vlearn: number of times to call learn to train V model
+		
+		'''
+
+		# Setting all models to train mode
+		self.Q.model.train()
+		self.M.model.train()
+		self.V.model.train()
+
+		M_losses = []
+		V_losses = []
+		
+		# Training M model
+		for _ in range(m_learn):
+			# Sample minibatch as tensors
+			states, actions, rewards, next_states, dones = self.memory.sample_batch()
+
+			batch_inds = torch.arange(self.batch_size, dtype=torch.int8)
+			# Q(s,a)
+			q_predicted = self.Q.model(states)
+			q_predicted = q_predicted[batch_inds.long(), actions.long()]
+
+			# r + gamma*max(Q(s',a'))
+			with torch.no_grad():
+				# Predicted values of next state from target model
+				q_values_target = self.target_Q.model(next_states)
+				max_q_targets, _ = torch.max(q_values_target, axis=1)
+
+				# Final td target values to measure loss from
+				q_targets = rewards + (1-dones.float())*self.gamma*max_q_targets
+
+
+			m_predicted = self.M.model(states)
+			m_predicted = m_predicted[batch_inds.long(), actions.long()]
+			v_predicted = self.V.model(states)
+			v_predicted = v_predicted[batch_inds.long(), actions.long()]
+
+			with torch.no_grad():
+				# Predicted values of next state from target model
+				m_values_target = self.target_M.model(next_states)
+				max_m_targets, _ = torch.max(m_values_target, axis=1)
+
+
+				# r**2 + 2*gamma*r*max(Q(s', a')) + (gamma**2)*max(M(s', a'))
+			m_targets = rewards**2 + (1-dones.float())*2*self.gamma*rewards*max_q_targets\
+							+ (1-dones.float())*(self.gamma**2)*max_m_targets
+
+
+			# M Loss and training
+			MLoss = self.criterion(m_predicted, m_targets)
+			self.M.model_op.zero_grad()
+			MLoss.backward()
+			self.M.model_op.step()
+			M_losses.append(MLoss.item())
+		
+		# Training V model
+		for _ in range(vlearn):
+
+			# Sample minibatch as tensors
+			states, actions, rewards, next_states, dones = self.memory.sample_batch()
+
+			batch_inds = torch.arange(self.batch_size, dtype=torch.int8)
+			# Q(s,a)
+			q_predicted = self.Q.model(states)
+			q_predicted = q_predicted[batch_inds.long(), actions.long()]
+
+			# r + gamma*max(Q(s',a'))
+			with torch.no_grad():
+				# Predicted values of next state from target model
+				q_values_target = self.target_Q.model(next_states)
+				max_q_targets, _ = torch.max(q_values_target, axis=1)
+
+				# Final td target values to measure loss from
+				q_targets = rewards + (1-dones.float())*self.gamma*max_q_targets
+
+			# Algo2
+			# M(s, a)
+			# V(s, a)
+			m_predicted = self.M.model(states)
+			m_predicted = m_predicted[batch_inds.long(), actions.long()]
+			v_predicted = self.V.model(states)
+			v_predicted = v_predicted[batch_inds.long(), actions.long()]
+
+			with torch.no_grad():
+				# Predicted values of next state from target model
+				m_values_target = self.target_M.model(next_states)
+				max_m_targets, _ = torch.max(m_values_target, axis=1)
+
+			# r**2 + 2*gamma*r*max(Q(s', a')) + (gamma**2)*max(M(s', a'))
+			m_targets = rewards**2 + (1-dones.float())*2*self.gamma*rewards*max_q_targets\
+						+ (1-dones.float())*(self.gamma**2)*max_m_targets
+
+			# detach is used to avoid gradients flowing into M and Q when computing
+			# loss for V model
+			v_targets = m_predicted.detach() - q_predicted.detach()**2
+
+			# V Loss and training
+			VLoss = self.criterion(v_predicted, v_targets)
+			self.V.model_op.zero_grad()
+			VLoss.backward()
+			self.V.model_op.step()
+			V_losses.append(VLoss.item())
+
+		'''
+		Will plot the variance, best actions and state visitations using Q and V models
+		'''
+		os.makedirs(os.path.join(self.logdir, 'Plots', 'offline_trained'), exist_ok=True)
+		# Setting all models to eval mode
+		self.Q.model.eval()
+		self.V.model.eval()
+
+		plt.close('all')	# Close previous plt figures to avoid memory error
+		rows, cols = np.indices((15,13))
+		rows = rows.reshape(-1)
+		cols = cols.reshape(-1)
+		posns = np.stack((rows, cols), axis=1)
+
+		# Will give a list of 210 elements, each having the patch and posn of all cells in the grid
+		all_states = list(map(lambda x: self.env.yx_to_obs(x), posns))
+
+		# Will convert all patches and posns into one tensor each to be passed to the models
+		all_patches, all_posns = map(lambda x: torch.from_numpy(np.stack(x)).to(self.device), \
+									zip(*all_states))
+
+		# [Tensor_of_shape(210, 4, 3, 3), Tensor_of_shape(210, 2)]
+		all_state_tensors = [all_patches.float(), all_posns.float()]
+
+		# Q values and best actions
+		qvalues = self.Q.model(all_state_tensors)
+		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
+
+		# Plotting Best actions
+		best_actions_map = np.zeros((15,13))
+		best_actions_map[rows, cols] = best_actions.cpu().numpy()
+
+		# These states either have obstacles, traps or goals and their best action values
+		# do not make any sense. Will be set to -1 to avoid confusion
+		obstacle_x, obstacle_y = np.where(self.env.grid!=0)
+		best_actions_map[obstacle_x, obstacle_y] = -1
+
+		# Convert to arrows instead of numbers
+		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1'}
+		f = np.vectorize(lambda x: num_to_arrow[x])
+		arrows = f(best_actions_map)
+
+		fig, ax = plt.subplots(figsize=(8,8))
+		ax.set_title('Best action in each state')
+		# np.save(os.path.join(self.logdir, 'Plots', 'Best_actions.npy'), best_actions_map)
+		ax = sns.heatmap(best_actions_map, annot=arrows, fmt="s", cmap='cool', linewidths=.5)
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'Best_actions.jpg'))
+		# plt.show()
+
+		# Plotting Variances of every state
+		variances = self.V.model(all_state_tensors)
+		variances = variances[torch.arange(195), best_actions].reshape(15,13)
+
+		# These states either have obstacles, traps or goals and their variance values
+		# do not make any sense. Need to be zeroed
+		variances[obstacle_x, obstacle_y] = 0
+
+		fig, ax = plt.subplots(figsize=(20,20))
+		ax.set_title('Variances values of every state')
+		ax = sns.heatmap(variances.cpu().data.numpy().astype(int), annot=True, \
+			fmt=".1g", cmap='cool', linewidths=1)
+		# np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'Variances.jpg'))
+		# plt.show()
+
+		# Plotting state visitation
+		fig, ax = plt.subplots(figsize=(20,20))
+		ax = sns.heatmap(self.env.visited, annot=False, fmt=".1g", cmap='cool', linewidths=1)
+		ax.set_title('State visitation')
+		# np.save(os.path.join(self.logdir, 'Plots', 'State Visitation.npy'), self.env.visited)
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'State Visitation.jpg'))
+		# plt.show()
+
+
+		'''
+		Plotting M and V Losses while offline training
+		Saving Q, M, V models for evaluation later
+		'''
+		plt.close('all')	
+		
+		# Close previous plt figures to avoid memory error
+		# Visualizations
+
+		# Plotting M Losses
+		smoothing_number = 30
+		x = np.arange(0, len(M_losses), smoothing_number)
+		x = np.append(x, len(M_losses))
+		y = [np.average(M_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		x = x[1:]
+
+		fig, ax0 = plt.subplots(figsize=(8,6))
+		ax0.set_title('M Losses - Offline training')
+		ax0.plot(x, y)
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'MLosses-offline.jpg'), \
+			bbox_inches ="tight",\
+			dpi=250)
+
+
+		# Plotting V Losses
+		smoothing_number = 50
+		x = np.arange(0, len(V_losses), smoothing_number)
+		x = np.append(x, len(V_losses))
+		y = [np.average(V_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		x = x[1:]
+
+		fig, ax0 = plt.subplots(figsize=(8,6))
+		ax0.set_title('V Losses - Offline training')
+		ax0.plot(x, y)
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'VLosses-offline.jpg'), \
+			bbox_inches ="tight",\
+			dpi=250)
+
+
+		# Saving, Q, M, V models
+		path = os.path.join(self.logdir, 'Plots', 'offline_trained')
+		torch.save(self.Q.model.state_dict(), os.path.join(path, 'Qmodel.pth'))
+		torch.save(self.M.model.state_dict(), os.path.join(path, 'Mmodel.pth'))
+		torch.save(self.V.model.state_dict(), os.path.join(path, 'Vmodel.pth'))
+
+	def check_model_values(modelsdir, posn):
+		'''
+		Takes in models directory and prints the values of Q, M, V models at a specific position
+		'''
+
+		env = Grid(patch_size=5, expert_map_f='expert_map.npy')
+		device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+
+		Q = QNet(device, 1e-4, '15k/v5/')	# logdir does not matter here
+		Q.load_model(os.path.join(modelsdir, 'Qmodel.pth'))
+		M = MNet(device, 1e-4, '15k/v5/')
+		M.load_model(os.path.join(modelsdir, 'Mmodel.pth'))
+		V = VNet(device, 1e-4, '15k/v5/')
+		V.load_model(os.path.join(modelsdir, 'Vmodel.pth'))
+
+		Q.model.eval()
+		M.model.eval()
+		V.model.eval()
+
+		rows, cols = np.indices((15,13))
+		rows = rows.reshape(-1)
+		cols = cols.reshape(-1)
+		posns = np.stack((rows, cols), axis=1)
+
+		# Will give a list of 210 elements, each having the patch and posn of all cells in the grid
+		all_states = list(map(lambda x: env.yx_to_obs(x), posns))
+
+		# Will convert all patches and posns into one tensor each to be passed to the models
+		all_patches, all_posns = map(lambda x: torch.from_numpy(np.stack(x)).to(device), \
+									zip(*all_states))
+
+		# [Tensor_of_shape(210, 4, 3, 3), Tensor_of_shape(210, 2)]
+		all_state_tensors = [all_patches.float(), all_posns.float()]
+
+		# Q values and best actions
+		qvalues = Q.model(all_state_tensors)
+		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
+
+		# Plotting Best actions
+		best_actions_map = np.zeros((15,13))
+		best_actions_map[rows, cols] = best_actions.cpu().numpy()
+
+		# These states either have obstacles, traps or goals and their best action values
+		# do not make any sense. Will be set to -1 to avoid confusion
+		obstacle_x, obstacle_y = np.where(env.grid!=0)
+		best_actions_map[obstacle_x, obstacle_y] = -1
+
+		# Plotting Variances of every state
+		variances = V.model(all_state_tensors)
+		mvalues = M.model(all_state_tensors)
+
+		qvalues = qvalues.reshape(15,13,4)
+		mvalues = mvalues.reshape(15,13,4)
+		variances = variances.reshape(15,13,4)
+
+		print(f'Q Values: {qvalues[posn[0], posn[1]]}')
+		print(f'M Values: {mvalues[posn[0], posn[1]]}')
+		print(f'V Values: {variances[posn[0], posn[1]]}')
