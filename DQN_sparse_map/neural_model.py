@@ -67,25 +67,31 @@ class NeuralNet(nn.Module):
 
     self.linear1 = nn.Sequential(
       nn.Flatten(),
-      nn.Linear(25, 12),
-      nn.BatchNorm1d(12),
+      nn.Linear(25, 128),
+      nn.BatchNorm1d(128),
       nn.ReLU()
     )
 
     self.linear2 = nn.Sequential(
-      nn.Linear(12, 8),
-      nn.BatchNorm1d(8),
+      nn.Linear(128, 128),
+      nn.BatchNorm1d(128),
       nn.ReLU()
     )
 
     self.linear3 = nn.Sequential(
-      nn.Linear(8, 8),
-      nn.BatchNorm1d(8),
+      nn.Linear(128, 128),
+      nn.BatchNorm1d(128),
       nn.ReLU()
     )
 
     self.linear4 = nn.Sequential(
-      nn.Linear(8, 4)
+      nn.Linear(128, 64),
+      nn.BatchNorm1d(64),
+      nn.ReLU()
+    )
+
+    self.linear5 = nn.Sequential(
+      nn.Linear(64, 4)
     )
 
   def forward(self, state):

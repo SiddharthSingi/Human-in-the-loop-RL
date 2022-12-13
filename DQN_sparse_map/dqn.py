@@ -165,8 +165,9 @@ class DQN_Agent():
 
 		# Setting all models to train mode
 		self.Q.model.train()
-		self.M.model.train()
-		self.V.model.train()
+		if self.alg2:
+			self.M.model.train()
+			self.V.model.train()
 
 		# Sample minibatch as tensors
 		states, actions, rewards, next_states, dones = self.memory.sample_batch()
@@ -205,13 +206,21 @@ class DQN_Agent():
 				m_values_target = self.target_M.model(next_states)
 				max_m_targets, _ = torch.max(m_values_target, axis=1)
 
+				# Predicted values of current state from target model M and Q
+				# for variance model true values
+				m_cur_target = self.target_M.model(states)
+				m_cur_target = m_cur_target[batch_inds.long(), actions.long()]
+
+				q_cur_target = self.target_Q.model(states)
+				q_cur_target = q_cur_target[batch_inds.long(), actions.long()]
+
 			# r**2 + 2*gamma*r*max(Q(s', a')) + (gamma**2)*max(M(s', a'))
 			m_targets = rewards**2 + (1-dones.float())*2*self.gamma*rewards*max_q_targets\
 						+ (1-dones.float())*(self.gamma**2)*max_m_targets
 
-			# detach is used to avoid gradients flowing into M and Q when computing
+			# m_cur_target and q_cur_target were built inside torch.no_grad to avoid gradients flowing
 			# loss for V model
-			v_targets = m_predicted.detach() - q_predicted.detach()**2
+			v_targets = m_cur_target - q_cur_target**2
 
 			# M Loss and training
 			MLoss = self.criterion(m_predicted, m_targets)
@@ -375,7 +384,7 @@ class DQN_Agent():
 		fig, ax = plt.subplots(figsize=(20,20))
 		ax.set_title('Variances values of every state')
 		ax = sns.heatmap(variances.cpu().data.numpy().astype(int), annot=True, \
-			fmt=".1g", cmap='cool', linewidths=1)
+			fmt=".0f", cmap='cool', linewidths=1)
 		np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Variances.jpg'))
 		# plt.show()
@@ -421,7 +430,7 @@ class DQN_Agent():
 		y = [np.average(ep_rewards[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
-		fig, ax0 = plt.subplots(figsize=(8,6))
+		fig, ax0 = plt.subplots(figsize=(15,6))
 		ax0.set_title('Rewards per episode')
 		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'rewards.jpg'), \
@@ -436,7 +445,7 @@ class DQN_Agent():
 		y = [np.average(ep_lenghts[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
-		fig, ax0 = plt.subplots(figsize=(8,6))
+		fig, ax0 = plt.subplots(figsize=(15,6))
 		ax0.set_title('Episode Lengths')
 		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'lengths.jpg'), \
@@ -448,7 +457,7 @@ class DQN_Agent():
 		# Plotting Losses
 		smoothing_number = 50
 
-		fig, ax = plt.subplots(figsize=(8,8))
+		fig, ax = plt.subplots(figsize=(15,6))
 		plotlist = Losses['Q']
 		x = np.arange(0, len(plotlist), smoothing_number)
 		x = np.append(x, len(plotlist))
@@ -462,7 +471,7 @@ class DQN_Agent():
 			dpi=250)
 		# plt.show()
 
-		fig, ax = plt.subplots(figsize=(8,8))
+		fig, ax = plt.subplots(figsize=(15,6))
 		plotlist = Losses['M']
 		x = np.arange(0, len(plotlist), smoothing_number)
 		x = np.append(x, len(plotlist))
@@ -476,7 +485,7 @@ class DQN_Agent():
 			dpi=250)
 		# plt.show()
 
-		fig, ax = plt.subplots(figsize=(8,8))
+		fig, ax = plt.subplots(figsize=(15,6))
 		plotlist = Losses['V']
 		x = np.arange(0, len(plotlist), smoothing_number)
 		x = np.append(x, len(plotlist))
@@ -492,7 +501,7 @@ class DQN_Agent():
 	
 		return
 
-	def offline_training(self, m_learn, vlearn, smoothing_number):
+	def offline_training(self, m_learn, vlearn, smoothing_number, target_freq=1000):
 		'''
 		Trains and plots the M and V models offline at the end
 		mlearn: number of times to call learn to train M model
@@ -509,7 +518,7 @@ class DQN_Agent():
 		V_losses = []
 		
 		# Training M model
-		for _ in range(m_learn):
+		for i in range(m_learn):
 			# Sample minibatch as tensors
 			states, actions, rewards, next_states, dones = self.memory.sample_batch()
 
@@ -550,47 +559,35 @@ class DQN_Agent():
 			MLoss.backward()
 			self.M.model_op.step()
 			M_losses.append(MLoss.item())
+
+			if i%target_freq==0:
+				self.target_M.model.load_state_dict(self.M.model.state_dict())
 		
 		# Training V model
 		for _ in range(vlearn):
 
 			# Sample minibatch as tensors
 			states, actions, rewards, next_states, dones = self.memory.sample_batch()
-
 			batch_inds = torch.arange(self.batch_size, dtype=torch.int8)
-			# Q(s,a)
-			q_predicted = self.Q.model(states)
-			q_predicted = q_predicted[batch_inds.long(), actions.long()]
-
-			# r + gamma*max(Q(s',a'))
-			with torch.no_grad():
-				# Predicted values of next state from target model
-				q_values_target = self.target_Q.model(next_states)
-				max_q_targets, _ = torch.max(q_values_target, axis=1)
-
-				# Final td target values to measure loss from
-				q_targets = rewards + (1-dones.float())*self.gamma*max_q_targets
 
 			# Algo2
 			# M(s, a)
 			# V(s, a)
-			m_predicted = self.M.model(states)
-			m_predicted = m_predicted[batch_inds.long(), actions.long()]
 			v_predicted = self.V.model(states)
 			v_predicted = v_predicted[batch_inds.long(), actions.long()]
 
 			with torch.no_grad():
-				# Predicted values of next state from target model
-				m_values_target = self.target_M.model(next_states)
-				max_m_targets, _ = torch.max(m_values_target, axis=1)
+				# Predicted values of current state from target model M and Q
+				# for variance model true values
+				m_cur_target = self.target_M.model(states)
+				m_cur_target = m_cur_target[batch_inds.long(), actions.long()]
 
-			# r**2 + 2*gamma*r*max(Q(s', a')) + (gamma**2)*max(M(s', a'))
-			m_targets = rewards**2 + (1-dones.float())*2*self.gamma*rewards*max_q_targets\
-						+ (1-dones.float())*(self.gamma**2)*max_m_targets
+				q_cur_target = self.target_Q.model(states)
+				q_cur_target = q_cur_target[batch_inds.long(), actions.long()]
 
-			# detach is used to avoid gradients flowing into M and Q when computing
+			# m_cur_target and q_cur_target were built inside torch.no_grad to avoid gradients flowing
 			# loss for V model
-			v_targets = m_predicted.detach() - q_predicted.detach()**2
+			v_targets = m_cur_target - q_cur_target**2
 
 			# V Loss and training
 			VLoss = self.criterion(v_predicted, v_targets)
@@ -598,6 +595,10 @@ class DQN_Agent():
 			VLoss.backward()
 			self.V.model_op.step()
 			V_losses.append(VLoss.item())
+
+		# Save the M and V models
+		self.M.save_model_weights()
+		self.V.save_model_weights()	
 
 		'''
 		Will plot the variance, best actions and state visitations using Q and V models
@@ -656,10 +657,10 @@ class DQN_Agent():
 		# do not make any sense. Need to be zeroed
 		variances[obstacle_x, obstacle_y] = 0
 
-		fig, ax = plt.subplots(figsize=(20,20))
+		fig, ax = plt.subplots(figsize=(10,10))
 		ax.set_title('Variances values of every state')
 		ax = sns.heatmap(variances.cpu().data.numpy().astype(int), annot=True, \
-			fmt=".1g", cmap='cool', linewidths=1)
+			fmt=".0f", cmap='cool', linewidths=1)
 		# np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'Variances.jpg'))
 		# plt.show()
@@ -671,7 +672,6 @@ class DQN_Agent():
 		# np.save(os.path.join(self.logdir, 'Plots', 'State Visitation.npy'), self.env.visited)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'State Visitation.jpg'))
 		# plt.show()
-
 
 		'''
 		Plotting M and V Losses while offline training
@@ -688,7 +688,7 @@ class DQN_Agent():
 		y = [np.average(M_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
-		fig, ax0 = plt.subplots(figsize=(8,6))
+		fig, ax0 = plt.subplots(figsize=(15,6))
 		ax0.set_title('M Losses - Offline training')
 		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'MLosses-offline.jpg'), \
@@ -702,7 +702,7 @@ class DQN_Agent():
 		y = [np.average(V_losses[x[i]:x[i+1]]) for i in range(len(x)-1)]
 		x = x[1:]
 
-		fig, ax0 = plt.subplots(figsize=(8,6))
+		fig, ax0 = plt.subplots(figsize=(15,6))
 		ax0.set_title('V Losses - Offline training')
 		ax0.plot(x, y)
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'offline_trained', 'VLosses-offline.jpg'), \
@@ -716,12 +716,12 @@ class DQN_Agent():
 		torch.save(self.M.model.state_dict(), os.path.join(path, 'Mmodel.pth'))
 		torch.save(self.V.model.state_dict(), os.path.join(path, 'Vmodel.pth'))
 
-	def check_model_values(modelsdir, posn):
+	def check_model_values(self, modelsdir, posn):
 		'''
 		Takes in models directory and prints the values of Q, M, V models at a specific position
 		'''
 
-		env = Grid(patch_size=5, expert_map_f='expert_map.npy')
+		env = Grid(patch_size=5)
 		device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
 		Q = QNet(device, 1e-4, '15k/v5/')	# logdir does not matter here

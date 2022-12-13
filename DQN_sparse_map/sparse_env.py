@@ -189,10 +189,10 @@ class Grid:
 
 
 # This code will also be run when importing this file
-gridtest = Grid(patch_size=5)
-gridtest.viz_grid('obstacles')
-obs = gridtest.reset([1,8])
-print(obs)
+# gridtest = Grid(patch_size=5)
+# gridtest.viz_grid('obstacles')
+# obs = gridtest.reset([1,8])
+# print(obs)
 # new_obs, reward, done = gridtest.step(0)
 
 # np.set_printoptions(threshold=sys.maxsize)
