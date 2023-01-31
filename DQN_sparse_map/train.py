@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-from sparse_env import Grid, OceanMap
+from sparse_env import Grid, AlternatingMap
 from dqn import DQN_Agent
 import torch
 from matplotlib import pyplot as plt
@@ -26,7 +26,7 @@ def main(args):
 	learn_freq = 1		# Frequency of timesteps to call self.learn()
 	target_freq = 4000	# Frequency of timesteps to update target networks
 	alg2 = True			# Whether we want to train models M and V
-	logdir = 'DQN_sparse_map/Ocean/50k/v4'
+	logdir = 'DQN_sparse_map/Ocean/50k/v5'
 	device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 	torch.set_num_threads(8)
 
@@ -52,8 +52,8 @@ def main(args):
 	logdir = {logdir}')
 	f.close()
 	
-	env = OceanMap(patch_size=5)
-	test_env = OceanMap(0, patch_size=5)
+	env = Grid(patch_size=5)
+	test_env = Grid(0, patch_size=5)
 	DQN = DQN_Agent(env, test_env, lr, device, burn_in=burn_in, gamma=gamma, \
 		alg2=alg2, replay_mem=replay_mem, batch_size=batch_size, \
 		logdir=logdir, lr_v=lr_v)
