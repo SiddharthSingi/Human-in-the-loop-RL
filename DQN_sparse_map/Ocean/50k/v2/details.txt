@@ -1,0 +1,17 @@
+
+	num_episodes = 50000	# Number of episodes to train on
+	ep_decay_in = 30000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
+	eps_start = 0.7
+	eps_end = 0.05
+	gamma = 0.9
+	alg2 = True
+	lr = 2e-05			# Learning rate for Q, M, V models
+	lr_v = 2e-05		# Learning rate for V model
+	burn_in = 30		# Number of episodes added to replay memory on suniform policy at initiialization
+	init_learn = 250	# Number of times models are learnt with just burn in memory
+	replay_mem = 15000	# Replay memory size
+	batch_size = 128	# Batch size for training model when DQN.learn() is called
+	eval_freq = 3000	# Frequency at which to plot best action, variance and state visitation
+	learn_freq = 1	# Frequency of timesteps to call self.learn()
+	target_freq = 4000	# Frequency of timesteps to update target networks
+	logdir = DQN_sparse_map/Ocean/50k/v2

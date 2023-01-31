@@ -28,14 +28,13 @@ class QNet():
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Qmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, 'Qmodel.pt')
+		torch.save(self.model, path)
 		return path
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
-		# e.g.: torch.save(self.model.state_dict(), model_file)
-		self.model.load_state_dict(torch.load(model_file))
+		self.model = torch.load(model_file)
 	
 	def load_model_weights(self, weight_file):
 		# Optional Helper function to load model weights.
@@ -79,12 +78,12 @@ class MNet():
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
 		# e.g.: torch.save(self.model.state_dict(), model_file)
-		self.model.load_state_dict(torch.load(model_file))
+		self.model = torch.load(model_file)
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Mmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, 'Mmodel.pt')
+		torch.save(self.model, path)
 		return path
 
 class VNet():
@@ -103,14 +102,14 @@ class VNet():
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Vmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, 'Vmodel.pt')
+		torch.save(self.model, path)
 		return path
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
 		# e.g.: torch.save(self.model.state_dict(), model_file)
-		self.model.load_state_dict(torch.load(model_file))
+		self.model = torch.load(model_file)
 
 	def load_model_weights(self, weight_file):
 		# Optional Helper function to load model weights.
@@ -328,12 +327,15 @@ class DQN_Agent():
 		Will plot the variance, best actions and state visitations using Q and V models
 		'''
 
+		m, n = self.env.grid.shape
+
 		# Setting all models to eval mode
 		self.Q.model.eval()
+		self.M.model.eval()
 		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((15,13))
+		rows, cols = np.indices((m, n))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -353,14 +355,14 @@ class DQN_Agent():
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
-		best_actions_map = np.zeros((15,13))
+		best_actions_map = np.zeros((m, n))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
 		# do not make any sense. Will be set to -1 to avoid confusion
 		obstacle_x, obstacle_y = np.where(self.env.grid!=0)
 		best_actions_map[obstacle_x, obstacle_y] = -1
-
+		
 		# Convert to arrows instead of numbers
 		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1'}
 		f = np.vectorize(lambda x: num_to_arrow[x])
@@ -373,9 +375,27 @@ class DQN_Agent():
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Best_actions.jpg'))
 		# plt.show()
 
+
+		# Plotting Moment of returns of every state
+		moments = self.M.model(all_state_tensors)
+		moments = moments[torch.arange(m*n), best_actions].reshape(m, n)
+
+		# These states either have obstacles, traps or goals and their variance values
+		# do not make any sense. Need to be zeroed
+		moments[obstacle_x, obstacle_y] = 0
+
+		fig, ax = plt.subplots(figsize=(20,20))
+		ax.set_title('Predicted moment of return of every state')
+		ax = sns.heatmap(moments.cpu().data.numpy().astype(int), annot=True, \
+			fmt=".0f", cmap='cool', linewidths=1)
+		np.save(os.path.join(self.logdir, 'Plots', 'Moments.npy'), moments.cpu().data.numpy().astype(int))
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'Moments.jpg'))
+		# plt.show()
+
+
 		# Plotting Variances of every state
 		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(195), best_actions].reshape(15,13)
+		variances = variances[torch.arange(m*n), best_actions].reshape(m, n)
 
 		# These states either have obstacles, traps or goals and their variance values
 		# do not make any sense. Need to be zeroed
@@ -431,9 +451,9 @@ class DQN_Agent():
 		x = x[1:]
 
 		fig, ax0 = plt.subplots(figsize=(15,6))
-		ax0.set_title('Rewards per episode')
+		ax0.set_title('Returns per episode')
 		ax0.plot(x, y)
-		plt.savefig(os.path.join(self.logdir, 'Plots', 'rewards.jpg'), \
+		plt.savefig(os.path.join(self.logdir, 'Plots', 'returns.jpg'), \
 			bbox_inches ="tight",\
 			dpi=250)
 		# plt.show()
@@ -516,6 +536,8 @@ class DQN_Agent():
 
 		M_losses = []
 		V_losses = []
+
+		m, n = self.env.grid.shape
 		
 		# Training M model
 		for i in range(m_learn):
@@ -609,7 +631,7 @@ class DQN_Agent():
 		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((15,13))
+		rows, cols = np.indices((m. n))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -629,7 +651,7 @@ class DQN_Agent():
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
-		best_actions_map = np.zeros((15,13))
+		best_actions_map = np.zeros((m, n))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
@@ -651,7 +673,7 @@ class DQN_Agent():
 
 		# Plotting Variances of every state
 		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(195), best_actions].reshape(15,13)
+		variances = variances[torch.arange(m*n), best_actions].reshape(m, n)
 
 		# These states either have obstacles, traps or goals and their variance values
 		# do not make any sense. Need to be zeroed
@@ -712,9 +734,9 @@ class DQN_Agent():
 
 		# Saving, Q, M, V models
 		path = os.path.join(self.logdir, 'Plots', 'offline_trained')
-		torch.save(self.Q.model.state_dict(), os.path.join(path, 'Qmodel.pth'))
-		torch.save(self.M.model.state_dict(), os.path.join(path, 'Mmodel.pth'))
-		torch.save(self.V.model.state_dict(), os.path.join(path, 'Vmodel.pth'))
+		torch.save(self.Q.model, os.path.join(path, 'Qmodel.pt'))
+		torch.save(self.M.model, os.path.join(path, 'Mmodel.pt'))
+		torch.save(self.V.model, os.path.join(path, 'Vmodel.pt'))
 
 	def check_model_values(self, modelsdir, posn):
 		'''
@@ -725,17 +747,19 @@ class DQN_Agent():
 		device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
 		Q = QNet(device, 1e-4, '15k/v5/')	# logdir does not matter here
-		Q.load_model(os.path.join(modelsdir, 'Qmodel.pth'))
+		Q.load_model(os.path.join(modelsdir, 'Qmodel.pt'))
 		M = MNet(device, 1e-4, '15k/v5/')
-		M.load_model(os.path.join(modelsdir, 'Mmodel.pth'))
+		M.load_model(os.path.join(modelsdir, 'Mmodel.pt'))
 		V = VNet(device, 1e-4, '15k/v5/')
-		V.load_model(os.path.join(modelsdir, 'Vmodel.pth'))
+		V.load_model(os.path.join(modelsdir, 'Vmodel.pt'))
 
 		Q.model.eval()
 		M.model.eval()
 		V.model.eval()
 
-		rows, cols = np.indices((15,13))
+		m, n = self.env.grid.shape
+
+		rows, cols = np.indices((m, n))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -767,9 +791,9 @@ class DQN_Agent():
 		variances = V.model(all_state_tensors)
 		mvalues = M.model(all_state_tensors)
 
-		qvalues = qvalues.reshape(15,13,4)
-		mvalues = mvalues.reshape(15,13,4)
-		variances = variances.reshape(15,13,4)
+		qvalues = qvalues.reshape(m, n, 4)
+		mvalues = mvalues.reshape(m, n, 4)
+		variances = variances.reshape(m, n, 4)
 
 		print(f'Q Values: {qvalues[posn[0], posn[1]]}')
 		print(f'M Values: {mvalues[posn[0], posn[1]]}')

@@ -55,6 +55,7 @@ class Grid:
 
         fig, ax = plt.subplots()
         ax = sns.heatmap(map, annot=True, fmt=".2g", cmap='cool', linewidths=.5)
+        plt.savefig('DQN_sparse_map/deletegrid.png')
         plt.show()
 
     def disp_actions(grid):
@@ -178,7 +179,7 @@ class Grid:
                 
             # If goal state is reached
             if cell == 1:
-                reward += 200    # 100 for goal
+                reward += 200    # 200 for goal
                 done = True
 
         new_obs = self.yx_to_obs(new_state.astype('int'))
@@ -186,6 +187,67 @@ class Grid:
         self.done = done
 
         return new_obs, reward, done
+
+class OceanMap(Grid):
+    def __init__(self, expert_penalty=-5, patch_size=5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
+
+        # Grid 1, goal on top
+        self.gridopt1 = np.zeros((13,13))
+        self.gridopt1[0:5, 3:8] = -1
+        self.gridopt1[8:13, 3:8] = -1
+        # Goal
+        self.gridopt1[0:1, 8:13] = 1
+
+        # Grid 2, goal on bottom
+        self.gridopt2 = np.zeros((13,13))
+        self.gridopt2[0:5, 3:8] = -1
+        self.gridopt2[8:13, 3:8] = -1
+        # Goal
+        self.gridopt2[12:13, 8:13] = 1
+
+        # Array of all possible start positions for the agent in both grids
+        self.possible_starts = np.where(np.logical_and(self.gridopt1==0, self.gridopt2==0))
+        self.possible_starts = np.vstack((self.possible_starts[0], self.possible_starts[1])).T
+
+        # Used in the step function
+        self.action_add = np.array(
+            [[-1, 0], [1, 0], [0, -1], [0, 1]]
+        )
+
+        # Patch size that the agent is able to see. This must be an odd number
+        self.patch_size = patch_size
+
+        # Grid epsilon
+        self.g_epsilon = 0.00
+        
+        # Creates a padding around grid of self.patch_size with values -5 around
+        self.padded_grid = np.pad(self.gridopt1, self.patch_size, \
+            'constant', constant_values=-5)
+
+        self.visited = np.zeros_like(self.gridopt1)
+        self.grid = self.gridopt1 if np.random.random() < 0.5 else self.gridopt2
+
+
+    def reset(self, test=None):
+        '''
+        test: Optional param to start the episode at a particular cell position
+        
+        '''
+        self.grid = self.gridopt1 if np.random.random() < 0.5 else self.gridopt2
+        if test is not None:
+            obs = self.yx_to_obs(test)
+        else:
+            yx_start = self.possible_starts[np.random.randint(len(self.possible_starts))]
+            obs = self.yx_to_obs(yx_start)
+        self.current_state = obs
+        self.done = False
+        return obs
+
+
+# This code will also run while importing this file
+# gridtest = OceanMap(patch_size=5)
+# gridtest.viz_grid('obstacles')
+
 
 
 # This code will also be run when importing this file
