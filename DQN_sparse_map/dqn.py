@@ -631,8 +631,10 @@ class DQN_Agent():
 		self.Q.model.eval()
 		self.V.model.eval()
 
+		m, n = self.env.grid.shape
+
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((15,13))
+		rows, cols = np.indices((m, n))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
