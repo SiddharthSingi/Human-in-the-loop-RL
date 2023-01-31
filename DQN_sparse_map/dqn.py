@@ -28,13 +28,14 @@ class QNet():
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Qmodel.pt')
-		torch.save(self.model, path)
+		path = os.path.join(self.logdir, 'Qmodel.pth')
+		torch.save(self.model.state_dict(), path)
 		return path
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
-		self.model = torch.load(model_file)
+		# e.g.: torch.save(self.model.state_dict(), model_file)
+		self.model.load_state_dict(torch.load(model_file))
 	
 	def load_model_weights(self, weight_file):
 		# Optional Helper function to load model weights.
@@ -78,12 +79,12 @@ class MNet():
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
 		# e.g.: torch.save(self.model.state_dict(), model_file)
-		self.model = torch.load(model_file)
+		self.model.load_state_dict(torch.load(model_file))
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Mmodel.pt')
-		torch.save(self.model, path)
+		path = os.path.join(self.logdir, 'Mmodel.pth')
+		torch.save(self.model.state_dict(), path)
 		return path
 
 class VNet():
@@ -102,14 +103,14 @@ class VNet():
 
 	def save_model_weights(self):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Vmodel.pt')
-		torch.save(self.model, path)
+		path = os.path.join(self.logdir, 'Vmodel.pth')
+		torch.save(self.model.state_dict(), path)
 		return path
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
 		# e.g.: torch.save(self.model.state_dict(), model_file)
-		self.model = torch.load(model_file)
+		self.model.load_state_dict(torch.load(model_file))
 
 	def load_model_weights(self, weight_file):
 		# Optional Helper function to load model weights.
@@ -631,7 +632,7 @@ class DQN_Agent():
 		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
-		rows, cols = np.indices((m. n))
+		rows, cols = np.indices((15,13))
 		rows = rows.reshape(-1)
 		cols = cols.reshape(-1)
 		posns = np.stack((rows, cols), axis=1)
@@ -790,6 +791,7 @@ class DQN_Agent():
 		# Plotting Variances of every state
 		variances = V.model(all_state_tensors)
 		mvalues = M.model(all_state_tensors)
+
 
 		qvalues = qvalues.reshape(m, n, 4)
 		mvalues = mvalues.reshape(m, n, 4)

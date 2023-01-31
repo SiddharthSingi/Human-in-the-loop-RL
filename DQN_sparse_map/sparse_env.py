@@ -7,15 +7,19 @@ np.set_printoptions(threshold=sys.maxsize)
 class Grid:
     def __init__(self, expert_penalty=-5, patch_size = 5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
 
-        self.grid = np.zeros((15,13))
+        self.grid = np.zeros((11,16))
         # Obstacle
-        self.grid[0:9, 2:10] = -1
-        self.grid[3:6, 2:8] = 0
-        self.grid[12:215, 2:10] = -1
-        # Trap
-        # self.grid[35:40, 10:30] = -2
+        self.grid[0:3, 3:6] = -1
+        self.grid[8:11, 3:6] = -1
+        self.grid[3, 4] = -1
+        self.grid[7, 4] = -1
+        self.grid[0:3, 11:16] = -1
+        self.grid[4:7, 11:16] = -1
+        self.grid[8:11, 11:16] = -1
+        self.grid[6, 14] = 0
+
         # Goal
-        self.grid[0:15, 12] = 1
+        self.grid[7, 15] = 1
 
         # Array of all possible start positions for the agent
         self.possible_starts = np.where(self.grid==0)
@@ -188,7 +192,7 @@ class Grid:
 
         return new_obs, reward, done
 
-class OceanMap(Grid):
+class AlternatingMap(Grid):
     def __init__(self, expert_penalty=-5, patch_size=5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
 
         # Grid 1, goal on top
@@ -251,8 +255,8 @@ class OceanMap(Grid):
 
 
 # This code will also be run when importing this file
-# gridtest = Grid(patch_size=5)
-# gridtest.viz_grid('obstacles')
+gridtest = Grid(patch_size=5)
+gridtest.viz_grid('obstacles')
 # obs = gridtest.reset([1,8])
 # print(obs)
 # new_obs, reward, done = gridtest.step(0)
