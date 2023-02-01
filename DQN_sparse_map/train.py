@@ -26,7 +26,7 @@ def main(args):
 	learn_freq = 1		# Frequency of timesteps to call self.learn()
 	target_freq = 2000	# Frequency of timesteps to update target networks
 	alg2 = True			# Whether we want to train models M and V
-	logdir = 'DQN_sparse_map/Ocean/10k/v2'
+	logdir = 'DQN_sparse_map/Ocean/50k/v5'
 	device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 	torch.set_num_threads(8)
 
