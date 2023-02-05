@@ -10,8 +10,8 @@ import seaborn as sns
 
 def main(args):
 	
-	num_episodes = 10000	# Number of episodes to train on
-	ep_decay_in = 6000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
+	num_episodes = 20000	# Number of episodes to train on
+	ep_decay_in = 15000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
 	eps_start = 0.7
 	eps_end = 0.05
 	lr = 2e-5			# Learning rate for Q, M models
@@ -25,13 +25,21 @@ def main(args):
 	eval_freq = 1500	# Frequency at which to plot best action, variance and state visitation
 	learn_freq = 1		# Frequency of timesteps to call self.learn()
 	target_freq = 2000	# Frequency of timesteps to update target networks
-	alg2 = True			# Whether we want to train models M and V
-	logdir = 'DQN_sparse_map/Ocean/50k/v5'
+	alg2 = False			# Whether we want to train models M and V
+	logdir = 'DQN_sparse_map/Ocean/20k/v6/alg1'
+	expert_penalty = -25	# Value should be negative
 	device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-	torch.set_num_threads(8)
+	torch.set_num_threads(4)
 
 	# Adding all hyperparametres to a text file
 	os.makedirs(logdir, exist_ok=True)
+	
+	env = Grid(patch_size=5, expert_map_f = 'DQN_sparse_map/Ocean/expert_policy.npy', expert_penalty=expert_penalty)
+	test_env = Grid(0, patch_size=5)
+	DQN = DQN_Agent(env, test_env, lr, device, burn_in=burn_in, gamma=gamma, \
+		alg2=alg2, replay_mem=replay_mem, batch_size=batch_size, \
+		logdir=logdir, lr_v=lr_v)
+
 	f = open(f'{logdir}/details.txt', 'w')
 	f.write(f'\n\
 	num_episodes = {num_episodes}	# Number of episodes to train on\n\
@@ -49,14 +57,10 @@ def main(args):
 	eval_freq = {eval_freq}	# Frequency at which to plot best action, variance and state visitation\n\
 	learn_freq = {learn_freq}	# Frequency of timesteps to call self.learn()\n\
 	target_freq = {target_freq}	# Frequency of timesteps to update target networks\n\
-	logdir = {logdir}')
+	logdir = {logdir}\n\
+	Alg1 Expert Penalty = {expert_penalty}\n\n\
+	Neural network architecture = {DQN.Q.model}\n')
 	f.close()
-	
-	env = Grid(patch_size=5)
-	test_env = Grid(0, patch_size=5)
-	DQN = DQN_Agent(env, test_env, lr, device, burn_in=burn_in, gamma=gamma, \
-		alg2=alg2, replay_mem=replay_mem, batch_size=batch_size, \
-		logdir=logdir, lr_v=lr_v)
 
 	ep_lengths, ep_rewards, Losses = DQN.train(num_episodes, ep_decay_in, eps_start, eps_end, \
 		initial_learn=init_learn, eval_freq=eval_freq, learn_freq=learn_freq, target_freq=target_freq,\
@@ -67,7 +71,7 @@ def main(args):
 	DQN.plotLosses(ep_lengths, ep_rewards, Losses)
 
 	# Training M and V models at the end
-	DQN.offline_training(5000, 5000, smoothing_number=250, target_freq=500)
+	# DQN.offline_training(5000, 5000, smoothing_number=250, target_freq=500)
 
 if __name__ == '__main__':
 	main(sys.argv)

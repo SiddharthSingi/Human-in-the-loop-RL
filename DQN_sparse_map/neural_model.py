@@ -107,7 +107,7 @@ class NeuralNet(nn.Module):
     # )
 
     self.linear8 = nn.Sequential(
-      nn.Linear(64, 4)
+      nn.Linear(64, 5)
     )
 
 
