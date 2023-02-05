@@ -14,13 +14,13 @@ class QNet():
 	# The network should take in state of the world as an input,
 	# and output Q values of the actions available to the agent as the output.
 
-	def __init__(self, device, lr, logdir):
+	def __init__(self, device, lr, logdir, alg2):
 		# Define  network architecture here. It is also a good idea to define any training operations
 		# and optimizers here, initialize your variables, or alternately compile your model here.
 		## Logs
 		self.logdir = logdir
 		self.lr = lr
-		self.nA = 4
+		self.nA = 4 if alg2 else 5
 		self.model = NeuralNet()
 		self.model_op = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 		self.device = device
@@ -123,8 +123,8 @@ class DQN_Agent():
 			alg2 (bool): Trains alg2 if True, else Vanilla Q learning
 	'''
 
-	def __init__(self, env, test_env, lr, device, burn_in=50, gamma=0.9, batch_size=64, alg2=True,\
-					replay_mem=2000, logdir = 'DQN_sparse_map/', lr_v=1e-4):
+	def __init__(self, env, test_env, lr, device, burn_in=50, gamma=0.9, batch_size=64, alg2=True,
+					replay_mem=2000, logdir='DQN_sparse_map-extra/', lr_v=1e-4):
 		self.env = env
 		self.test_env = test_env
 		self.nA = 4
@@ -136,7 +136,7 @@ class DQN_Agent():
 		os.makedirs(model_f, exist_ok=True)
 		os.makedirs(plots_f, exist_ok=True)
 
-		self.Q = QNet(self.device, lr, model_f)
+		self.Q = QNet(self.device, lr, model_f, alg1, alg2)
 		self.target_Q = QNet(self.device, lr, model_f)
 
 		self.criterion = nn.MSELoss()
@@ -234,7 +234,10 @@ class DQN_Agent():
 			VLoss.backward()
 			self.V.model_op.step()
 
-		return QLoss.item(), MLoss.item(), VLoss.item()
+			return QLoss.item(), MLoss.item(), VLoss.item()
+		
+		else:
+			return QLoss.item(), None, None
 
 	def train(self, num_episodes, decay_ep=False, eps_start=0.5, eps_end = 0.05, learn_freq=1000,\
 		target_freq=10000, save_freq=200, eval_freq=10000, initial_learn = 1000, maxlen=200):
@@ -294,9 +297,10 @@ class DQN_Agent():
 					# This will sample experiences from replay buffer and train the models.
 					qloss, mloss, vloss = self.learn()
 					Losses['Q'].append(qloss)
-					Losses['M'].append(mloss)
-					Losses['V'].append(vloss)
 					Losses['timestep'].append(t)
+					if self.alg2:
+						Losses['M'].append(mloss)
+						Losses['V'].append(vloss)
 					# print(f'Learning. Qloss: {qloss}, Mloss: {mloss}, VLoss: {vloss}, timestep: {t}')
 
 				if t % eval_freq == 0:
@@ -332,8 +336,6 @@ class DQN_Agent():
 
 		# Setting all models to eval mode
 		self.Q.model.eval()
-		self.M.model.eval()
-		self.V.model.eval()
 
 		plt.close('all')	# Close previous plt figures to avoid memory error
 		rows, cols = np.indices((m, n))
@@ -365,7 +367,7 @@ class DQN_Agent():
 		best_actions_map[obstacle_x, obstacle_y] = -1
 		
 		# Convert to arrows instead of numbers
-		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1'}
+		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1', -3: 'G', 4: 'E'}
 		f = np.vectorize(lambda x: num_to_arrow[x])
 		arrows = f(best_actions_map)
 
@@ -376,40 +378,6 @@ class DQN_Agent():
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'Best_actions.jpg'))
 		# plt.show()
 
-
-		# Plotting Moment of returns of every state
-		moments = self.M.model(all_state_tensors)
-		moments = moments[torch.arange(m*n), best_actions].reshape(m, n)
-
-		# These states either have obstacles, traps or goals and their variance values
-		# do not make any sense. Need to be zeroed
-		moments[obstacle_x, obstacle_y] = 0
-
-		fig, ax = plt.subplots(figsize=(20,20))
-		ax.set_title('Predicted moment of return of every state')
-		ax = sns.heatmap(moments.cpu().data.numpy().astype(int), annot=True, \
-			fmt=".0f", cmap='cool', linewidths=1)
-		np.save(os.path.join(self.logdir, 'Plots', 'Moments.npy'), moments.cpu().data.numpy().astype(int))
-		plt.savefig(os.path.join(self.logdir, 'Plots', 'Moments.jpg'))
-		# plt.show()
-
-
-		# Plotting Variances of every state
-		variances = self.V.model(all_state_tensors)
-		variances = variances[torch.arange(m*n), best_actions].reshape(m, n)
-
-		# These states either have obstacles, traps or goals and their variance values
-		# do not make any sense. Need to be zeroed
-		variances[obstacle_x, obstacle_y] = 0
-
-		fig, ax = plt.subplots(figsize=(20,20))
-		ax.set_title('Variances values of every state')
-		ax = sns.heatmap(variances.cpu().data.numpy().astype(int), annot=True, \
-			fmt=".0f", cmap='cool', linewidths=1)
-		np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
-		plt.savefig(os.path.join(self.logdir, 'Plots', 'Variances.jpg'))
-		# plt.show()
-
 		# Plotting state visitation
 		fig, ax = plt.subplots(figsize=(20,20))
 		ax = sns.heatmap(self.env.visited, annot=False, fmt=".1g", cmap='cool', linewidths=1)
@@ -418,7 +386,47 @@ class DQN_Agent():
 		plt.savefig(os.path.join(self.logdir, 'Plots', 'State Visitation.jpg'))
 		# plt.show()
 
-		return variances.cpu().data.numpy(), best_actions_map, self.env.visited
+		if self.alg2:
+			self.M.model.eval()
+			self.V.model.eval()
+
+			# Plotting Moment of returns of every state
+			moments = self.M.model(all_state_tensors)
+			moments = moments[torch.arange(m*n), best_actions].reshape(m, n)
+
+			# These states either have obstacles, traps or goals and their variance values
+			# do not make any sense. Need to be zeroed
+			moments[obstacle_x, obstacle_y] = 0
+
+			fig, ax = plt.subplots(figsize=(20,20))
+			ax.set_title('Predicted moment of return of every state')
+			ax = sns.heatmap(moments.cpu().data.numpy().astype(int), annot=True, \
+				fmt=".0f", cmap='cool', linewidths=1)
+			np.save(os.path.join(self.logdir, 'Plots', 'Moments.npy'), moments.cpu().data.numpy().astype(int))
+			plt.savefig(os.path.join(self.logdir, 'Plots', 'Moments.jpg'))
+			# plt.show()
+
+
+			# Plotting Variances of every state
+			variances = self.V.model(all_state_tensors)
+			variances = variances[torch.arange(m*n), best_actions].reshape(m, n)
+
+			# These states either have obstacles, traps or goals and their variance values
+			# do not make any sense. Need to be zeroed
+			variances[obstacle_x, obstacle_y] = 0
+
+			fig, ax = plt.subplots(figsize=(20,20))
+			ax.set_title('Variances values of every state')
+			ax = sns.heatmap(variances.cpu().data.numpy().astype(int), annot=True, \
+				fmt=".0f", cmap='cool', linewidths=1)
+			np.save(os.path.join(self.logdir, 'Plots', 'Variances.npy'), variances.cpu().data.numpy().astype(int))
+			plt.savefig(os.path.join(self.logdir, 'Plots', 'Variances.jpg'))
+			# plt.show()
+
+			return variances.cpu().data.numpy(), best_actions_map, self.env.visited
+		
+		else:
+			return None, best_actions_map, self.env.visited
 
 	def burn_in_memory(self, burnin_ep=50):
 
@@ -492,33 +500,34 @@ class DQN_Agent():
 			dpi=250)
 		# plt.show()
 
-		fig, ax = plt.subplots(figsize=(15,6))
-		plotlist = Losses['M']
-		x = np.arange(0, len(plotlist), smoothing_number)
-		x = np.append(x, len(plotlist))
-		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
-		x = x[1:]
-		sns.color_palette('muted')
-		sns.lineplot(x=x, y=y)
-		ax.set_title('M Losses')
-		plt.savefig(os.path.join(self.logdir, 'Plots', 'MLosses.jpg'), \
-			bbox_inches ="tight",\
-			dpi=250)
-		# plt.show()
+		if self.alg2:
+			fig, ax = plt.subplots(figsize=(15,6))
+			plotlist = Losses['M']
+			x = np.arange(0, len(plotlist), smoothing_number)
+			x = np.append(x, len(plotlist))
+			y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+			x = x[1:]
+			sns.color_palette('muted')
+			sns.lineplot(x=x, y=y)
+			ax.set_title('M Losses')
+			plt.savefig(os.path.join(self.logdir, 'Plots', 'MLosses.jpg'), \
+				bbox_inches ="tight",\
+				dpi=250)
+			# plt.show()
 
-		fig, ax = plt.subplots(figsize=(15,6))
-		plotlist = Losses['V']
-		x = np.arange(0, len(plotlist), smoothing_number)
-		x = np.append(x, len(plotlist))
-		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
-		x = x[1:]
-		sns.color_palette('muted')
-		sns.lineplot(x=x, y=y)
-		ax.set_title('V Losses')
-		plt.savefig(os.path.join(self.logdir, 'Plots', 'VLosses.jpg'), \
-			bbox_inches ="tight",\
-			dpi=250)
-		# plt.show()
+			fig, ax = plt.subplots(figsize=(15,6))
+			plotlist = Losses['V']
+			x = np.arange(0, len(plotlist), smoothing_number)
+			x = np.append(x, len(plotlist))
+			y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+			x = x[1:]
+			sns.color_palette('muted')
+			sns.lineplot(x=x, y=y)
+			ax.set_title('V Losses')
+			plt.savefig(os.path.join(self.logdir, 'Plots', 'VLosses.jpg'), \
+				bbox_inches ="tight",\
+				dpi=250)
+			# plt.show()
 	
 		return
 

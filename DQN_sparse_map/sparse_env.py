@@ -132,7 +132,7 @@ class Grid:
         obs_maps = np.stack((empties, obstacles, traps, goals), axis=0).astype('f')
         '''
         
-        return [np.expand_dims(patch, axis=0), np.array((y, x)).astype('f')]
+        return [np.expand_dims(patch, axis=0), np.array((y, x)).astype('int')]
 
     def step(self, a: int) -> None:
         """
@@ -150,7 +150,7 @@ class Grid:
             if np.random.random() < self.g_epsilon:
                 a = np.random.randint(4)
         else:
-            reward -= self.expert_penalty
+            reward += self.expert_penalty
             a = self.expertaction[self.current_state[1][0], self.current_state[1][1]]
         
         # Moving to the new state
@@ -191,6 +191,9 @@ class Grid:
         self.done = done
 
         return new_obs, reward, done
+
+    def create_expert_map(self):
+        return
 
 class AlternatingMap(Grid):
     def __init__(self, expert_penalty=-5, patch_size=5, expert_map_f='DQN_sparse_map/expert_map.npy') -> None:
@@ -255,8 +258,8 @@ class AlternatingMap(Grid):
 
 
 # This code will also be run when importing this file
-gridtest = Grid(patch_size=5)
-gridtest.viz_grid('obstacles')
+# gridtest = Grid(patch_size=5)
+# gridtest.viz_grid('obstacles')
 # obs = gridtest.reset([1,8])
 # print(obs)
 # new_obs, reward, done = gridtest.step(0)
