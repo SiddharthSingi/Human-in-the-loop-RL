@@ -136,8 +136,8 @@ class DQN_Agent():
 		os.makedirs(model_f, exist_ok=True)
 		os.makedirs(plots_f, exist_ok=True)
 
-		self.Q = QNet(self.device, lr, model_f, alg1, alg2)
-		self.target_Q = QNet(self.device, lr, model_f)
+		self.Q = QNet(self.device, lr, model_f, alg2)
+		self.target_Q = QNet(self.device, lr, model_f, alg2)
 
 		self.criterion = nn.MSELoss()
 		self.memory = Replay_Memory(self.device, batch_size=batch_size, memory_size=replay_mem)
