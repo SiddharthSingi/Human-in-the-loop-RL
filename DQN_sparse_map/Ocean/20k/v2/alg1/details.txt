@@ -1,0 +1,53 @@
+
+	num_episodes = 30000	# Number of episodes to train on
+	ep_decay_in = 22000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
+	eps_start = 0.7
+	eps_end = 0.05
+	gamma = 0.9
+	alg2 = False
+	lr = 0.0001			# Learning rate for Q, M, V models
+	lr_v = 0.0001		# Learning rate for V model
+	burn_in = 150		# Number of episodes added to replay memory on suniform policy at initiialization
+	init_learn = 1500	# Number of times models are learnt with just burn in memory
+	replay_mem = 5000	# Replay memory size
+	batch_size = 128	# Batch size for training model when DQN.learn() is called
+	eval_freq = 1500	# Frequency at which to plot best action, variance and state visitation
+	learn_freq = 1	# Frequency of timesteps to call self.learn()
+	target_freq = 2000	# Frequency of timesteps to update target networks
+	logdir = DQN_sparse_map/Ocean/20k/v2/alg1
+	Alg1 Expert Penalty = -3
+
+	Neural network architecture = NeuralNet(
+  (linear1): Sequential(
+    (0): Flatten(start_dim=1, end_dim=-1)
+    (1): Linear(in_features=25, out_features=64, bias=True)
+    (2): BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (3): ELU(alpha=1.0)
+  )
+  (linear2): Sequential(
+    (0): Linear(in_features=64, out_features=64, bias=True)
+    (1): BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ELU(alpha=1.0)
+  )
+  (linear3): Sequential(
+    (0): Linear(in_features=64, out_features=64, bias=True)
+    (1): BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): Tanh()
+  )
+  (linear4): Sequential(
+    (0): Linear(in_features=64, out_features=64, bias=True)
+    (1): BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): Tanh()
+  )
+  (linear5): Sequential(
+    (0): Linear(in_features=64, out_features=64, bias=True)
+    (1): BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): Tanh()
+  )
+  (linear6): Sequential(
+    (0): Linear(in_features=64, out_features=64, bias=True)
+  )
+  (linear8): Sequential(
+    (0): Linear(in_features=64, out_features=5, bias=True)
+  )
+)

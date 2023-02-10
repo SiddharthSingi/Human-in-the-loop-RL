@@ -750,7 +750,7 @@ class DQN_Agent():
 		torch.save(self.M.model, os.path.join(path, 'Mmodel.pt'))
 		torch.save(self.V.model, os.path.join(path, 'Vmodel.pt'))
 
-	def check_model_values(self, modelsdir, posn):
+	def check_model_values(self, modelsdir, posn, alg2):
 		'''
 		Takes in models directory and prints the values of Q, M, V models at a specific position
 		'''
@@ -758,16 +758,19 @@ class DQN_Agent():
 		env = Grid(patch_size=5)
 		device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
-		Q = QNet(device, 1e-4, '15k/v5/')	# logdir does not matter here
-		Q.load_model(os.path.join(modelsdir, 'Qmodel.pt'))
-		M = MNet(device, 1e-4, '15k/v5/')
-		M.load_model(os.path.join(modelsdir, 'Mmodel.pt'))
-		V = VNet(device, 1e-4, '15k/v5/')
-		V.load_model(os.path.join(modelsdir, 'Vmodel.pt'))
-
+		Q = QNet(device, 1e-4, '15k/v5/', alg2)	# logdir does not matter here
+		Q.load_model(os.path.join(modelsdir, 'Qmodel.pth'))
 		Q.model.eval()
-		M.model.eval()
-		V.model.eval()
+		actions = 5
+
+		if alg2:
+			M = MNet(device, 1e-4, '15k/v5/')
+			M.load_model(os.path.join(modelsdir, 'Mmodel.pth'))
+			V = VNet(device, 1e-4, '15k/v5/')
+			V.load_model(os.path.join(modelsdir, 'Vmodel.pth'))
+			M.model.eval()
+			V.model.eval()
+			actions = 4
 
 		m, n = self.env.grid.shape
 
@@ -791,7 +794,7 @@ class DQN_Agent():
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
-		best_actions_map = np.zeros((15,13))
+		best_actions_map = np.zeros((m, n))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
 
 		# These states either have obstacles, traps or goals and their best action values
@@ -799,15 +802,17 @@ class DQN_Agent():
 		obstacle_x, obstacle_y = np.where(env.grid!=0)
 		best_actions_map[obstacle_x, obstacle_y] = -1
 
-		# Plotting Variances of every state
-		variances = V.model(all_state_tensors)
-		mvalues = M.model(all_state_tensors)
+		qvalues = qvalues.reshape(m, n, actions)
 
+		if alg2:
+			# Plotting Variances of every state
+			variances = V.model(all_state_tensors)
+			mvalues = M.model(all_state_tensors)
 
-		qvalues = qvalues.reshape(m, n, 4)
-		mvalues = mvalues.reshape(m, n, 4)
-		variances = variances.reshape(m, n, 4)
+			mvalues = mvalues.reshape(m, n, actions)
+			variances = variances.reshape(m, n, actions)
 
 		print(f'Q Values: {qvalues[posn[0], posn[1]]}')
-		print(f'M Values: {mvalues[posn[0], posn[1]]}')
-		print(f'V Values: {variances[posn[0], posn[1]]}')
+		if alg2:
+			print(f'M Values: {mvalues[posn[0], posn[1]]}')
+			print(f'V Values: {variances[posn[0], posn[1]]}')

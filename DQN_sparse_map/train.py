@@ -10,24 +10,24 @@ import seaborn as sns
 
 def main(args):
 	
-	num_episodes = 20000	# Number of episodes to train on
-	ep_decay_in = 15000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
+	num_episodes = 30000	# Number of episodes to train on
+	ep_decay_in = 20000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
 	eps_start = 0.7
 	eps_end = 0.05
-	lr = 2e-5			# Learning rate for Q, M models
-	lr_v = 2e-5			# Learning rate for V model
-	burn_in = 30		# Number of episodes added to replay memory on suniform policy at initiialization
+	lr = 5e-5			# Learning rate for Q, M models
+	lr_v = 5e-5			# Learning rate for V model
+	burn_in = 150		# Number of episodes added to replay memory on suniform policy at initiialization
 	maxlen = 100		# Maximum allowed length of the agent
-	gamma = 0.9			# Discounted factor
-	init_learn = 150	# Number of times models are learnt with just burn in memory
+	gamma = 0.5			# Discounted factor
+	init_learn = 1500	# Number of times models are learnt with just burn in memory
 	replay_mem = 5000	# Replay memory sized
 	batch_size = 128	# Batch size for training model when DQN.learn() is called
 	eval_freq = 1500	# Frequency at which to plot best action, variance and state visitation
 	learn_freq = 1		# Frequency of timesteps to call self.learn()
 	target_freq = 2000	# Frequency of timesteps to update target networks
 	alg2 = False			# Whether we want to train models M and V
-	logdir = 'DQN_sparse_map/Ocean/20k/v6/alg1'
-	expert_penalty = -25	# Value should be negative
+	logdir = 'DQN_sparse_map/Ocean/20k/v10/alg1'
+	expert_penalty = 0	# Value should be negative
 	device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 	torch.set_num_threads(4)
 
