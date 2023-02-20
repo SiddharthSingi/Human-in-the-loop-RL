@@ -26,10 +26,15 @@ class QNet():
 		self.device = device
 		self.model.to(self.device)
 
-	def save_model_weights(self):
+	def save_model_weights(self, ep_number, loss):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Qmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, f'Qmodel_{ep_number}.pth')
+		torch.save({
+			'ep_number': ep_number,
+			'model_state_dict': self.model.state_dict(),
+			'optimizer_state_dict': self.model_op.state_dict(),
+			'loss': loss
+		}, path)
 		return path
 
 	def load_model(self, model_file):
@@ -63,7 +68,7 @@ class QNet():
 		return action
 
 class MNet():
-    # The network should take in state of the world as an input,
+	# The network should take in state of the world as an input,
 	# and output log M values of the actions available to the agent as the output.
 
 	def __init__(self, device, lr, logdir):
@@ -81,14 +86,19 @@ class MNet():
 		# e.g.: torch.save(self.model.state_dict(), model_file)
 		self.model.load_state_dict(torch.load(model_file))
 
-	def save_model_weights(self):
+	def save_model_weights(self, ep_number, loss):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Mmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, f'Mmodel_{ep_number}.pth')
+		torch.save({
+			'ep_number': ep_number,
+			'model_state_dict': self.model.state_dict(),
+			'optimizer_state_dict': self.model_op.state_dict(),
+			'loss': loss
+		}, path)
 		return path
 
 class VNet():
-    # The network should take in state of the world as an input,
+	# The network should take in state of the world as an input,
 	# and output log variance of the actions available to the agent as the output.
 
 	def __init__(self, device, lr, logdir):
@@ -101,10 +111,15 @@ class VNet():
 		self.model_op = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 		self.model.to(device)
 
-	def save_model_weights(self):
+	def save_model_weights(self, ep_number, loss):
 		# Helper function to save your model / weights.
-		path = os.path.join(self.logdir, 'Vmodel.pth')
-		torch.save(self.model.state_dict(), path)
+		path = os.path.join(self.logdir, f'Vmodel_{ep_number}.pth')
+		torch.save({
+			'ep_number': ep_number,
+			'model_state_dict': self.model.state_dict(),
+			'optimizer_state_dict': self.model_op.state_dict(),
+			'loss': loss
+		}, path)
 		return path
 
 	def load_model(self, model_file):
@@ -262,7 +277,7 @@ class DQN_Agent():
 		# Updating the models based on burned in memory
 		for _ in range(initial_learn):
 			_, _, _ = self.learn()
-		self.evaluate_agent()
+		self.evaluate_agent(0)
 		print('Initial Training done')
 
 		print('Starting to play')
@@ -305,7 +320,7 @@ class DQN_Agent():
 
 				if t % eval_freq == 0:
 					# print(Losses)
-					_, _, _ = self.evaluate_agent()
+					_, _, _ = self.evaluate_agent(ep)
 					self.plotLosses(ep_lengths, ep_rewards, Losses)
 					print('Plots Updated in folder!')
 
@@ -317,17 +332,18 @@ class DQN_Agent():
 
 				# Save models
 				if ep % save_freq == 0:
-					self.Q.save_model_weights()
+					qloss, mloss, vloss = self.learn()
+					self.Q.save_model_weights(ep, qloss)
 					if self.alg2:
-						self.M.save_model_weights()
-						self.V.save_model_weights()
+						self.M.save_model_weights(ep, mloss)
+						self.V.save_model_weights(ep, vloss)
 				t += 1
 			print(f'Episode {ep} over')
 			ep_rewards.append(total_reward)
 			ep_lengths.append(ep_l)
 		return ep_lengths, ep_rewards, Losses
 
-	def evaluate_agent(self):
+	def evaluate_agent(self, ep_num):
 		'''
 		Will plot the variance, best actions and state visitations using Q and V models
 		'''
@@ -444,10 +460,8 @@ class DQN_Agent():
 	def plotLosses(self, ep_lenghts, ep_rewards, Losses):
 		'''
 		Plots
-			Rewards
-			Episode length
-			Q, M, V Losses
-				vs episode number
+		Rewards, Episode length, Q, M, V Losses
+			vs episode number
 		'''
 		
 		plt.close('all')	# Close previous plt figures to avoid memory error
@@ -816,3 +830,109 @@ class DQN_Agent():
 		if alg2:
 			print(f'M Values: {mvalues[posn[0], posn[1]]}')
 			print(f'V Values: {variances[posn[0], posn[1]]}')
+
+
+	def policy_rollout(self, num_episodes, max_steps, smoothing=1000, best_action_f=False):
+		"""
+		Running Monte Carlo for average return we get from the action policy
+		num_episodes: to run for Monte Carlo
+		smoothing: smoothing number for reward plotting
+		qtable_path: path for best_action.npy to use if you do not want to train again
+		"""
+
+		best_actions = np.load(best_action_f)
+		rewards_list = []
+		ep_expert_calls = []
+		max_steps_reached = []
+		env = Grid(patch_size=5)
+		for ep in range(num_episodes):
+			done = False
+			patch, posn = env.reset()
+			if ep%100==0:
+				print(f'Episode: {ep}')
+			tot_reward = 0
+			expert_called = 0
+			step = 0
+			while not done and step<max_steps:
+				action = best_actions[posn[0], posn[1]].astype(int)
+				if action==4:
+					expert_called+=1
+				obs, reward, done = env.step(action)
+				tot_reward += reward
+				posn = obs[1]
+				# print(step)
+				step+=1
+			max_steps_reached.append(not done)
+			rewards_list.append(tot_reward)
+			ep_expert_calls.append(expert_called)
+
+		print('Average number of expert calls made: ', (sum(ep_expert_calls)/len(ep_expert_calls)))
+		print('Average return using best action plot: ', (sum(rewards_list)/len(rewards_list)))
+		print('Percentage of episodes stuck in infinity loop: ', (sum(max_steps_reached)/len(max_steps_reached)))
+
+
+
+	def threshold_rollout(self, num_episodes, max_thresh, thresh_spacing, qtable_f):
+		"""
+		Will create a policy where the expert is called if the variance is greater than the threshold
+		This policy is rolled on the environment for num_episodes episodes and the average of the return is
+		plotted for each threshold.
+		num_episodes: Average return is calculated for each policy for num_episodes
+		qtable_f: filename for the qtable that must have been trained using the ALG2 class, shape (10,10,4,3)
+
+		We use this to compute the 
+		"""
+		grid = ExpertGrid()
+		# For each state and action we have a q-value, 2nd reward moment and the variance using Bellman eqns
+		qtable = np.load(qtable_f)
+		thresh_rewards = []
+		thresholds = []
+		for thresh in range(0, max_thresh, thresh_spacing):
+			action_table = self.get_action_table(qtable, thresh)
+			cur_thresh_rewards = []
+			for ep in range(num_episodes):
+				done = False
+				posn = grid.reset()
+				tot_reward = 0
+				while not done:
+					action = action_table[posn[0], posn[1]]
+					obs, reward, done = grid.step(action)
+					tot_reward+=reward
+					posn = obs
+				cur_thresh_rewards.append(tot_reward)
+
+			thresh_avg_reward = sum(cur_thresh_rewards) / len(cur_thresh_rewards)
+			thresh_rewards.append(thresh_avg_reward)
+			thresholds.append(thresh)
+
+
+		# Saving the thresholdeds and their returns
+		thresh_rewards = np.array(thresh_rewards)
+		thresholds = np.array(thresholds)
+		os.makedirs(os.path.join(self.fname, 'thresh_rollout'))
+		np.savez(os.path.join(self.fname, 'thresh_rollout', 'thresholdrollout.npz'), thresh_rewards, thresholds)
+
+
+		# Policy of the best threshold
+		high_threshold = thresholds[np.argmax(thresh_rewards)]
+		best_action_table = self.get_action_table(qtable, high_threshold)
+		fig, ax = plt.subplots()
+		ax = sns.heatmap(best_action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+		plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Best threshold policy.jpg'), \
+			bbox_inches ="tight",\
+			dpi=250)
+
+		# Visualizing the average return for every threshold
+		fig, ax = plt.subplots()
+		ax = sns.barplot(x=thresholds, y=thresh_rewards)
+		ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
+		ax.set_xlabel('Thresholds')
+		ax.set_ylabel('Average Return (1000 episodes)')
+		ax.text(1, 0.2, f'Best threshold: {high_threshold}\n Highest average return: {np.max(thresh_rewards)}', \
+			horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+		# ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+		plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Thresholded action returns.jpg'), \
+			bbox_inches ="tight",\
+			dpi=250)
+
+		return
