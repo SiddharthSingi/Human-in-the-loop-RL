@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 from neural_model import NeuralNet
+import pickle
 from replay import Replay_Memory
 from sparse_env import Grid
 
@@ -148,6 +149,8 @@ class DQN_Agent():
 		self.logdir = logdir
 		model_f = os.path.join(self.logdir, 'models')
 		plots_f = os.path.join(self.logdir, 'Plots')
+		qvalues_f = os.path.join(self.logdir, 'Qvalues')
+		os.makedirs(qvalues_f, exist_ok=True)
 		os.makedirs(model_f, exist_ok=True)
 		os.makedirs(plots_f, exist_ok=True)
 
@@ -269,7 +272,7 @@ class DQN_Agent():
 		
 		ep_rewards = []
 		ep_lengths = []
-		Losses = {'Q': [], 'M': [], 'V': [], 'timestep': []}
+		Losses = {'Q': [], 'M': [], 'V': [], 'episode': []}
 		t = 0
 		if not decay_ep: decay_ep=num_episodes
 		lmda = math.log(eps_start/eps_end)/decay_ep
@@ -301,7 +304,7 @@ class DQN_Agent():
 				next_state, reward, done = self.env.step(action)
 				self.memory.cache(state, action, reward, next_state, done)
 				state = next_state
-
+				t += 1
 				total_reward += reward
 				ep_l += 1
 				self.env.visited[int(state[1][0]), int(state[1][1])] += 1
@@ -312,17 +315,11 @@ class DQN_Agent():
 					# This will sample experiences from replay buffer and train the models.
 					qloss, mloss, vloss = self.learn()
 					Losses['Q'].append(qloss)
-					Losses['timestep'].append(t)
+					Losses['episode'].append(t)
 					if self.alg2:
 						Losses['M'].append(mloss)
 						Losses['V'].append(vloss)
 					# print(f'Learning. Qloss: {qloss}, Mloss: {mloss}, VLoss: {vloss}, timestep: {t}')
-
-				if t % eval_freq == 0:
-					# print(Losses)
-					_, _, _ = self.evaluate_agent(ep)
-					self.plotLosses(ep_lengths, ep_rewards, Losses)
-					print('Plots Updated in folder!')
 
 				# Update Q and M target networks
 				if t % target_freq == 0:
@@ -330,17 +327,30 @@ class DQN_Agent():
 					if self.alg2:
 						self.target_M.model.load_state_dict(self.M.model.state_dict())
 
-				# Save models
-				if ep % save_freq == 0:
-					qloss, mloss, vloss = self.learn()
-					self.Q.save_model_weights(ep, qloss)
-					if self.alg2:
-						self.M.save_model_weights(ep, mloss)
-						self.V.save_model_weights(ep, vloss)
-				t += 1
+			# Save models
+			if ep % save_freq == 0:
+				_, _, _ = self.evaluate_agent(ep)
+				self.plotLosses(ep_lengths, ep_rewards, Losses)
+				qloss, mloss, vloss = self.learn()
+				self.Q.save_model_weights(ep, qloss)
+				print('Plots and arrays updated in folder!')
+
+				Losses['Q'].append(qloss)
+				Losses['episode'].append(ep)
+
+				if self.alg2:
+					Losses['M'].append(mloss)
+					Losses['V'].append(vloss)
+					self.M.save_model_weights(ep, mloss)
+					self.V.save_model_weights(ep, vloss)
+				
 			print(f'Episode {ep} over')
 			ep_rewards.append(total_reward)
 			ep_lengths.append(ep_l)
+
+		with open(os.path.join(self.logdir, 'Plots', 'Losses.pkl'), 'wb') as f:
+			pickle.dump(Losses, f)
+
 		return ep_lengths, ep_rewards, Losses
 
 	def evaluate_agent(self, ep_num):
@@ -369,19 +379,24 @@ class DQN_Agent():
 		# [Tensor_of_shape(210, 4, 3, 3), Tensor_of_shape(210, 2)]
 		all_state_tensors = [all_patches.float(), all_posns.float()]
 
+		# These states either have obstacles, traps or goals and their best action values
+		# do not make any sense. Will be set to -1 to avoid confusion
+		obstacle_x, obstacle_y = np.where(self.env.grid!=0)
+
 		# Q values and best actions
 		qvalues = self.Q.model(all_state_tensors)
+		# Saving Q values
+		qvalues_arr = qvalues.reshape(m, n, -1)
+		qvalues_arr[obstacle_x, obstacle_y, :] = -100
+		np.save(os.path.join(self.logdir, 'Qvalues', f'Qvalues_{ep_num}.npy'), qvalues_arr.cpu().data.numpy().astype(float))
+
 		best_actions = torch.argmax(qvalues, axis=1).reshape(-1)
 
 		# Plotting Best actions
 		best_actions_map = np.zeros((m, n))
 		best_actions_map[rows, cols] = best_actions.cpu().numpy()
-
-		# These states either have obstacles, traps or goals and their best action values
-		# do not make any sense. Will be set to -1 to avoid confusion
-		obstacle_x, obstacle_y = np.where(self.env.grid!=0)
 		best_actions_map[obstacle_x, obstacle_y] = -1
-		
+
 		# Convert to arrows instead of numbers
 		num_to_arrow = {0: u'\u2191', 1: u'\u2193', 2: u'\u2190', 3: u'\u2192', -1:'-1', -3: 'G', 4: 'E'}
 		f = np.vectorize(lambda x: num_to_arrow[x])
@@ -502,10 +517,12 @@ class DQN_Agent():
 
 		fig, ax = plt.subplots(figsize=(15,6))
 		plotlist = Losses['Q']
-		x = np.arange(0, len(plotlist), smoothing_number)
-		x = np.append(x, len(plotlist))
-		y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
-		x = x[1:]
+		# x = np.arange(0, len(plotlist), smoothing_number)
+		# x = np.append(x, len(plotlist))
+		# y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+		# x = x[1:]
+		x = Losses['episode']
+		y = plotlist
 		sns.color_palette('muted')
 		sns.lineplot(x=x, y=y)
 		ax.set_title('Q Losses')
@@ -517,10 +534,12 @@ class DQN_Agent():
 		if self.alg2:
 			fig, ax = plt.subplots(figsize=(15,6))
 			plotlist = Losses['M']
-			x = np.arange(0, len(plotlist), smoothing_number)
-			x = np.append(x, len(plotlist))
-			y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
-			x = x[1:]
+			# x = np.arange(0, len(plotlist), smoothing_number)
+			# x = np.append(x, len(plotlist))
+			# y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+			# x = x[1:]
+			x = Losses['episode']
+			y = plotlist
 			sns.color_palette('muted')
 			sns.lineplot(x=x, y=y)
 			ax.set_title('M Losses')
@@ -531,10 +550,12 @@ class DQN_Agent():
 
 			fig, ax = plt.subplots(figsize=(15,6))
 			plotlist = Losses['V']
-			x = np.arange(0, len(plotlist), smoothing_number)
-			x = np.append(x, len(plotlist))
-			y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
-			x = x[1:]
+			# x = np.arange(0, len(plotlist), smoothing_number)
+			# x = np.append(x, len(plotlist))
+			# y = [np.average(plotlist[x[i]:x[i+1]]) for i in range(len(x)-1)]
+			# x = x[1:]
+			x = Losses['episode']
+			y = plotlist
 			sns.color_palette('muted')
 			sns.lineplot(x=x, y=y)
 			ax.set_title('V Losses')
@@ -831,8 +852,7 @@ class DQN_Agent():
 			print(f'M Values: {mvalues[posn[0], posn[1]]}')
 			print(f'V Values: {variances[posn[0], posn[1]]}')
 
-
-	def policy_rollout(self, num_episodes, max_steps, smoothing=1000, best_action_f=False):
+	def policy_rollout(self, num_episodes, max_steps, best_action_f=False):
 		"""
 		Running Monte Carlo for average return we get from the action policy
 		num_episodes: to run for Monte Carlo
@@ -844,35 +864,62 @@ class DQN_Agent():
 		rewards_list = []
 		ep_expert_calls = []
 		max_steps_reached = []
-		env = Grid(patch_size=5)
 		for ep in range(num_episodes):
 			done = False
-			patch, posn = env.reset()
-			if ep%100==0:
-				print(f'Episode: {ep}')
+			patch, posn = self.env.reset()
 			tot_reward = 0
 			expert_called = 0
 			step = 0
+			posns_reached = [posn.tolist()]
 			while not done and step<max_steps:
 				action = best_actions[posn[0], posn[1]].astype(int)
 				if action==4:
 					expert_called+=1
-				obs, reward, done = env.step(action)
+				obs, reward, done = self.env.step(action)
 				tot_reward += reward
 				posn = obs[1]
+				if posn.tolist() in posns_reached:
+					done = True
+				else:
+					posns_reached.append(posn.tolist())
 				# print(step)
 				step+=1
 			max_steps_reached.append(not done)
 			rewards_list.append(tot_reward)
 			ep_expert_calls.append(expert_called)
 
-		print('Average number of expert calls made: ', (sum(ep_expert_calls)/len(ep_expert_calls)))
-		print('Average return using best action plot: ', (sum(rewards_list)/len(rewards_list)))
-		print('Percentage of episodes stuck in infinity loop: ', (sum(max_steps_reached)/len(max_steps_reached)))
+		avg_expert_calls = sum(ep_expert_calls)/len(ep_expert_calls)
+		avg_return = sum(rewards_list)/len(rewards_list)
+		percent_stuck = sum(max_steps_reached)/len(max_steps_reached)
+		# print('Average number of expert calls made: ', avg_expert_calls)
+		# print('Average return using best action plot: ', avg_return)
+		# print('Percentage of episodes stuck in infinity loop: ', percent_stuck)
 
+		return avg_expert_calls, avg_return, percent_stuck
 
+	def get_action_table(self, variances, threshold, best_actions):
+		"""
+		returns an action table where action=4 if variance is above the threshold
+		qtable: shape=(10,10,4,3) Learned from ALG2
+		threshold: threshold for the variance value
+		"""
+		m, n = self.env.grid.shape
+		rows, cols = np.indices((m, n))
+		rows = rows.reshape(-1)
+		cols = cols.reshape(-1)
+		# best_actions = np.argmax(qtable[:, :, :, 0], axis=2).reshape(-1)
+		# variances = qtable[:, :, :, 2][rows, cols, best_actions]
+		action_table = np.where(variances<threshold, best_actions, 4).reshape(m, n)
 
-	def threshold_rollout(self, num_episodes, max_thresh, thresh_spacing, qtable_f):
+		# # Visualize a policy
+		# if threshold==3800:
+		#     fig, ax = plt.subplots()
+		#     ax = sns.heatmap(action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+		#     plt.show()
+
+		return action_table
+
+	def threshold_rollout(self, num_episodes, thresh_spacing, dir_f, max_steps=100):
 		"""
 		Will create a policy where the expert is called if the variance is greater than the threshold
 		This policy is rolled on the environment for num_episodes episodes and the average of the return is
@@ -882,57 +929,85 @@ class DQN_Agent():
 
 		We use this to compute the 
 		"""
-		grid = ExpertGrid()
 		# For each state and action we have a q-value, 2nd reward moment and the variance using Bellman eqns
-		qtable = np.load(qtable_f)
-		thresh_rewards = []
+		variances = np.load(os.path.join(dir_f, 'Variances.npy'))
+		best_actions = np.load(os.path.join(dir_f, 'Best_actions.npy'))
+		max_thresh = np.max(variances)
 		thresholds = []
+		returns = []
+		expert_calls = []
+		max_steps_reached = []
+
 		for thresh in range(0, max_thresh, thresh_spacing):
-			action_table = self.get_action_table(qtable, thresh)
+			action_table = self.get_action_table(variances, thresh, best_actions)
 			cur_thresh_rewards = []
+			cur_thresh_expert_calls = []
+			cur_thresh_max_steps_reached = []
 			for ep in range(num_episodes):
 				done = False
-				posn = grid.reset()
+				patch, posn = self.env.reset()
 				tot_reward = 0
-				while not done:
-					action = action_table[posn[0], posn[1]]
-					obs, reward, done = grid.step(action)
-					tot_reward+=reward
-					posn = obs
+				expert_called = 0
+				step = 0
+				posns_reached = [posn.tolist()]
+				while not done and step<max_steps:
+					action = action_table[posn[0], posn[1]].astype(int)
+					if action==4:
+						expert_called+=1
+					obs, reward, done = self.env.step(action)
+					tot_reward += reward
+					posn = obs[1]
+					if posn.tolist() in posns_reached:
+						done = True
+					else:
+						posns_reached.append(posn.tolist())
+					# print(step)
+					step+=1
 				cur_thresh_rewards.append(tot_reward)
+				cur_thresh_expert_calls.append(expert_called)
+				cur_thresh_max_steps_reached.append(not done)
 
-			thresh_avg_reward = sum(cur_thresh_rewards) / len(cur_thresh_rewards)
-			thresh_rewards.append(thresh_avg_reward)
+			avg_expert_calls = sum(cur_thresh_expert_calls)/len(cur_thresh_expert_calls)
+			avg_return = sum(cur_thresh_rewards)/len(cur_thresh_rewards)
+			percent_stuck = sum(cur_thresh_max_steps_reached)/len(cur_thresh_max_steps_reached)
+
 			thresholds.append(thresh)
+			returns.append(avg_return)
+			expert_calls.append(avg_expert_calls)
+			max_steps_reached.append(percent_stuck)
+		
+		print('Thresholds: ', thresholds)
+		print('Average number of expert calls made: ', expert_calls)
+		print('Average return using best action plot: ', returns)
+		print('Percentage of episodes stuck in infinity loop: ', max_steps_reached)
+
+		# # Saving the thresholdeds and their returns
+		# thresh_rewards = np.array(thresh_rewards)
+		# thresholds = np.array(thresholds)
+		# os.makedirs(os.path.join(self.fname, 'thresh_rollout'))
+		# np.savez(os.path.join(self.fname, 'thresh_rollout', 'thresholdrollout.npz'), thresh_rewards, thresholds)
 
 
-		# Saving the thresholdeds and their returns
-		thresh_rewards = np.array(thresh_rewards)
-		thresholds = np.array(thresholds)
-		os.makedirs(os.path.join(self.fname, 'thresh_rollout'))
-		np.savez(os.path.join(self.fname, 'thresh_rollout', 'thresholdrollout.npz'), thresh_rewards, thresholds)
+		# # Policy of the best threshold
+		# high_threshold = thresholds[np.argmax(thresh_rewards)]
+		# best_action_table = self.get_action_table(qtable, high_threshold)
+		# fig, ax = plt.subplots()
+		# ax = sns.heatmap(best_action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
+		# plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Best threshold policy.jpg'), \
+		# 	bbox_inches ="tight",\
+		# 	dpi=250)
 
-
-		# Policy of the best threshold
-		high_threshold = thresholds[np.argmax(thresh_rewards)]
-		best_action_table = self.get_action_table(qtable, high_threshold)
-		fig, ax = plt.subplots()
-		ax = sns.heatmap(best_action_table, annot=True, fmt=".1f", cmap='cool', linewidths=.5)
-		plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Best threshold policy.jpg'), \
-			bbox_inches ="tight",\
-			dpi=250)
-
-		# Visualizing the average return for every threshold
-		fig, ax = plt.subplots()
-		ax = sns.barplot(x=thresholds, y=thresh_rewards)
-		ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
-		ax.set_xlabel('Thresholds')
-		ax.set_ylabel('Average Return (1000 episodes)')
-		ax.text(1, 0.2, f'Best threshold: {high_threshold}\n Highest average return: {np.max(thresh_rewards)}', \
-			horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
-		# ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-		plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Thresholded action returns.jpg'), \
-			bbox_inches ="tight",\
-			dpi=250)
+		# # Visualizing the average return for every threshold
+		# fig, ax = plt.subplots()
+		# ax = sns.barplot(x=thresholds, y=thresh_rewards)
+		# ax.set_xticks(np.arange(0, len(thresholds)+1, 10))
+		# ax.set_xlabel('Thresholds')
+		# ax.set_ylabel('Average Return (1000 episodes)')
+		# ax.text(1, 0.2, f'Best threshold: {high_threshold}\n Highest average return: {np.max(thresh_rewards)}', \
+		# 	horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+		# # ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+		# plt.savefig(os.path.join(self.fname, 'thresh_rollout', 'Thresholded action returns.jpg'), \
+		# 	bbox_inches ="tight",\
+		# 	dpi=250)
 
 		return
