@@ -14,19 +14,19 @@ def main(args):
 	ep_decay_in = 22000	# Epsilon will decay from eps_start to eps_end in ep_decay_in episodes
 	eps_start = 0.7
 	eps_end = 0.05
-	lr = 5e-5			# Learning rate for Q, M models
-	lr_v = 5e-5			# Learning rate for V model
+	lr = 1e-5			# Learning rate for Q, M models
+	lr_v = 1e-5			# Learning rate for V model
 	burn_in = 150		# Number of episodes added to replay memory on suniform policy at initiialization
 	maxlen = 100		# Maximum allowed length of the agent
 	gamma = 0.9			# Discounted factor
 	init_learn = 1500	# Number of times models are learnt with just burn in memory
 	replay_mem = 5000	# Replay memory sized
 	batch_size = 128	# Batch size for training model when DQN.learn() is called
-	eval_freq = 1500	# Frequency at which to plot best action, variance and state visitation
+	save_freq = 50		# Frequency at which to save model
 	learn_freq = 1		# Frequency of timesteps to call self.learn()
 	target_freq = 2000	# Frequency of timesteps to update target networks
 	alg2 = False			# Whether we want to train models M and V
-	logdir = 'DQN_sparse_map/Ocean/30k/v9/alg1'
+	logdir = 'DQN_sparse_map/Ocean/30k2/v9/alg1'
 	expert_penalty = -0.9	# Value should be negative
 	device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 	torch.set_num_threads(4)
@@ -54,7 +54,6 @@ def main(args):
 	init_learn = {init_learn}	# Number of times models are learnt with just burn in memory\n\
 	replay_mem = {replay_mem}	# Replay memory size\n\
 	batch_size = {batch_size}	# Batch size for training model when DQN.learn() is called\n\
-	eval_freq = {eval_freq}	# Frequency at which to plot best action, variance and state visitation\n\
 	learn_freq = {learn_freq}	# Frequency of timesteps to call self.learn()\n\
 	target_freq = {target_freq}	# Frequency of timesteps to update target networks\n\
 	logdir = {logdir}\n\
@@ -63,11 +62,11 @@ def main(args):
 	f.close()
 
 	ep_lengths, ep_rewards, Losses = DQN.train(num_episodes, ep_decay_in, eps_start, eps_end, \
-		initial_learn=init_learn, eval_freq=eval_freq, learn_freq=learn_freq, target_freq=target_freq,\
-			maxlen=maxlen)
+		initial_learn=init_learn, learn_freq=learn_freq, target_freq=target_freq,\
+			maxlen=maxlen, save_freq=save_freq)
 
 	# Plotting variances, best_action map, state visitation, 
-	variances, best_actions, state_visitation = DQN.evaluate_agent()
+	variances, best_actions, state_visitation = DQN.evaluate_agent(num_episodes)
 	DQN.plotLosses(ep_lengths, ep_rewards, Losses)
 
 	# Training M and V models at the end
