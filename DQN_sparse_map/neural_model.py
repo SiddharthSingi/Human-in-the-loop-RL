@@ -62,37 +62,37 @@ import torch.nn.functional as F
 # If patch size is 5
 class NeuralNet(nn.Module):
     
-  def __init__(self):
+  def __init__(self, nActions=4):
     super().__init__()
 
     self.linear1 = nn.Sequential(
       nn.Flatten(),
       nn.Linear(25, 64),
-      nn.BatchNorm1d(64),
+      # nn.BatchNorm1d(64),
       nn.ELU()
     )
 
     self.linear2 = nn.Sequential(
       nn.Linear(64, 64),
-      nn.BatchNorm1d(64),
+      # nn.BatchNorm1d(64),
       nn.ELU()
     )
 
     self.linear3 = nn.Sequential(
       nn.Linear(64, 64),
-      nn.BatchNorm1d(64),
+      # nn.BatchNorm1d(64),
       nn.Tanh()
     )
 
     self.linear4 = nn.Sequential(
       nn.Linear(64, 64),
-      nn.BatchNorm1d(64),
+      # nn.BatchNorm1d(64),
       nn.Tanh()
     )
 
     self.linear5 = nn.Sequential(
       nn.Linear(64, 64),
-      nn.BatchNorm1d(64),
+      # nn.BatchNorm1d(64),
       nn.Tanh()
     )
 
@@ -107,7 +107,7 @@ class NeuralNet(nn.Module):
     # )
 
     self.linear8 = nn.Sequential(
-      nn.Linear(64, 5)
+      nn.Linear(64, nActions)
     )
 
 
